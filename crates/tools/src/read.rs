@@ -1,0 +1,105 @@
+//! Read tool — read files with line numbers and offset/limit.
+//!
+//! Pattern from Claude Code's FileReadTool: cat -n format output,
+//! offset/limit for large files, BOM stripping.
+
+use anyhow::Result;
+use cisco_code_protocol::{PermissionLevel, ToolResult};
+use serde_json::json;
+use std::path::Path;
+
+use crate::{Tool, ToolContext};
+
+pub struct ReadTool;
+
+impl Tool for ReadTool {
+    fn name(&self) -> &str {
+        "Read"
+    }
+
+    fn description(&self) -> &str {
+        "Reads a file from the local filesystem. Returns content with line numbers. Use offset and limit for large files."
+    }
+
+    fn input_schema(&self) -> serde_json::Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Absolute path to the file to read"
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "Line number to start reading from (0-indexed)"
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Number of lines to read (default: 2000)"
+                }
+            },
+            "required": ["file_path"]
+        })
+    }
+
+    async fn call(&self, input: serde_json::Value, ctx: &ToolContext) -> Result<ToolResult> {
+        let file_path = input["file_path"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("missing 'file_path'"))?;
+
+        let offset = input["offset"].as_u64().unwrap_or(0) as usize;
+        let limit = input["limit"].as_u64().unwrap_or(2000) as usize;
+
+        // Resolve relative paths against cwd
+        let path = if Path::new(file_path).is_absolute() {
+            file_path.to_string()
+        } else {
+            Path::new(&ctx.cwd)
+                .join(file_path)
+                .to_string_lossy()
+                .to_string()
+        };
+
+        // Read file
+        let content = match tokio::fs::read_to_string(&path).await {
+            Ok(c) => c,
+            Err(e) => return Ok(ToolResult::error(format!("Failed to read {path}: {e}"))),
+        };
+
+        // Strip BOM
+        let content = if content.starts_with('\u{FEFF}') {
+            &content[3..]
+        } else {
+            &content
+        };
+
+        // Apply offset and limit, format with line numbers (cat -n style)
+        let lines: Vec<&str> = content.lines().collect();
+        let total_lines = lines.len();
+        let end = (offset + limit).min(total_lines);
+        let selected = &lines[offset.min(total_lines)..end];
+
+        let mut output = String::new();
+        for (i, line) in selected.iter().enumerate() {
+            let line_num = offset + i + 1; // 1-indexed
+            output.push_str(&format!("{line_num}\t{line}\n"));
+        }
+
+        if output.is_empty() {
+            output = "(empty file)".to_string();
+        }
+
+        if end < total_lines {
+            output.push_str(&format!(
+                "\n... ({} more lines, use offset to read more)",
+                total_lines - end
+            ));
+        }
+
+        Ok(ToolResult::success(output))
+    }
+
+    fn permission_level(&self) -> PermissionLevel {
+        PermissionLevel::ReadOnly
+    }
+}

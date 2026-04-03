@@ -21,3 +21,4 @@ pub mod compact;
 
 pub use conversation::*;
 pub use config::*;
+pub use session::Session;
