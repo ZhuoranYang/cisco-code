@@ -260,3 +260,105 @@ struct BlockAcc {
     tool_name: String,
     tool_json: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_anthropic_client_creation() {
+        let client = AnthropicClient::new("test-key");
+        assert_eq!(client.api_key, "test-key");
+        assert_eq!(client.base_url, "https://api.anthropic.com");
+        assert_eq!(client.max_retries, 2);
+    }
+
+    #[test]
+    fn test_custom_base_url() {
+        let client = AnthropicClient::new("key").with_base_url("https://custom.api.example.com");
+        assert_eq!(client.base_url, "https://custom.api.example.com");
+    }
+
+    #[test]
+    fn test_build_body_minimal() {
+        let client = AnthropicClient::new("key");
+        let req = CompletionRequest {
+            model: "claude-sonnet-4-6".into(),
+            system_prompt: "You are helpful.".into(),
+            messages: vec![ApiMessage {
+                role: "user".into(),
+                content: serde_json::json!("Hello"),
+            }],
+            tools: vec![],
+            max_tokens: 1024,
+            temperature: None,
+        };
+        let body = client.build_body(&req);
+
+        assert_eq!(body["model"], "claude-sonnet-4-6");
+        assert_eq!(body["max_tokens"], 1024);
+        assert_eq!(body["system"], "You are helpful.");
+        assert_eq!(body["stream"], true);
+        assert!(body.get("tools").is_none());
+        assert!(body.get("temperature").is_none());
+    }
+
+    #[test]
+    fn test_build_body_with_tools_and_temperature() {
+        let client = AnthropicClient::new("key");
+        let req = CompletionRequest {
+            model: "claude-opus-4-6".into(),
+            system_prompt: "Agent".into(),
+            messages: vec![],
+            tools: vec![cisco_code_protocol::ToolDefinition {
+                name: "Read".into(),
+                description: "Read a file".into(),
+                input_schema: serde_json::json!({"type": "object"}),
+            }],
+            max_tokens: 4096,
+            temperature: Some(0.7),
+        };
+        let body = client.build_body(&req);
+
+        assert!(body["tools"].is_array());
+        assert_eq!(body["tools"].as_array().unwrap().len(), 1);
+        assert_eq!(body["tools"][0]["name"], "Read");
+        assert_eq!(body["temperature"], 0.7);
+    }
+
+    #[test]
+    fn test_completion_request_serialization() {
+        let req = CompletionRequest {
+            model: "test".into(),
+            system_prompt: "sys".into(),
+            messages: vec![ApiMessage {
+                role: "user".into(),
+                content: serde_json::json!("hi"),
+            }],
+            tools: vec![],
+            max_tokens: 100,
+            temperature: None,
+        };
+        let json = serde_json::to_value(&req).unwrap();
+        assert_eq!(json["model"], "test");
+        assert!(json.get("temperature").is_none()); // skip_serializing_if
+    }
+
+    #[test]
+    fn test_assistant_event_variants() {
+        let text = AssistantEvent::TextDelta("hello".into());
+        assert!(matches!(text, AssistantEvent::TextDelta(ref t) if t == "hello"));
+
+        let tool = AssistantEvent::ToolUse {
+            id: "tu_1".into(),
+            name: "Bash".into(),
+            input: serde_json::json!({"command": "ls"}),
+        };
+        assert!(matches!(tool, AssistantEvent::ToolUse { ref name, .. } if name == "Bash"));
+
+        let stop = AssistantEvent::MessageStop {
+            stop_reason: "end_turn".into(),
+        };
+        assert!(matches!(stop, AssistantEvent::MessageStop { ref stop_reason } if stop_reason == "end_turn"));
+    }
+}

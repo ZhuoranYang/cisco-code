@@ -153,3 +153,140 @@ fn normalize_quotes(s: &str) -> String {
         .replace('\u{201C}', "\"") // "
         .replace('\u{201D}', "\"") // "
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_normalize_quotes() {
+        assert_eq!(normalize_quotes("it\u{2019}s"), "it's");
+        assert_eq!(normalize_quotes("\u{201C}hi\u{201D}"), "\"hi\"");
+        assert_eq!(normalize_quotes("plain"), "plain");
+    }
+
+    #[test]
+    fn test_find_actual_string_exact() {
+        let content = "fn main() {\n    println!(\"hello\");\n}";
+        let result = find_actual_string(content, "println!(\"hello\")");
+        assert_eq!(result, Some("println!(\"hello\")".to_string()));
+    }
+
+    #[test]
+    fn test_find_actual_string_not_found() {
+        let content = "fn main() {}";
+        let result = find_actual_string(content, "does_not_exist");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_find_actual_string_curly_quotes() {
+        let content = "let s = \"hello world\";";
+        // Searching with curly quotes should find the straight-quote version
+        let result = find_actual_string(content, "let s = \u{201C}hello world\u{201D};");
+        assert!(result.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_edit_same_string_rejected() {
+        let tool = EditTool;
+        let ctx = crate::ToolContext {
+            cwd: "/tmp".into(),
+            interactive: false,
+        };
+        let input = serde_json::json!({
+            "file_path": "/tmp/test.txt",
+            "old_string": "same",
+            "new_string": "same"
+        });
+        let result = tool.call(input, &ctx).await.unwrap();
+        assert!(result.is_error);
+        assert!(result.output.contains("must be different"));
+    }
+
+    #[tokio::test]
+    async fn test_edit_missing_file() {
+        let tool = EditTool;
+        let ctx = crate::ToolContext {
+            cwd: "/tmp".into(),
+            interactive: false,
+        };
+        let input = serde_json::json!({
+            "file_path": "/tmp/cisco_code_nonexistent_file_12345.txt",
+            "old_string": "a",
+            "new_string": "b"
+        });
+        let result = tool.call(input, &ctx).await.unwrap();
+        assert!(result.is_error);
+        assert!(result.output.contains("Failed to read"));
+    }
+
+    #[tokio::test]
+    async fn test_edit_replace_single() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.txt");
+        std::fs::write(&path, "hello world").unwrap();
+
+        let tool = EditTool;
+        let ctx = crate::ToolContext {
+            cwd: dir.path().to_string_lossy().to_string(),
+            interactive: false,
+        };
+        let input = serde_json::json!({
+            "file_path": path.to_string_lossy(),
+            "old_string": "hello",
+            "new_string": "goodbye"
+        });
+        let result = tool.call(input, &ctx).await.unwrap();
+        assert!(!result.is_error);
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(content, "goodbye world");
+    }
+
+    #[tokio::test]
+    async fn test_edit_replace_all() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.txt");
+        std::fs::write(&path, "aaa bbb aaa ccc aaa").unwrap();
+
+        let tool = EditTool;
+        let ctx = crate::ToolContext {
+            cwd: dir.path().to_string_lossy().to_string(),
+            interactive: false,
+        };
+        let input = serde_json::json!({
+            "file_path": path.to_string_lossy(),
+            "old_string": "aaa",
+            "new_string": "xxx",
+            "replace_all": true
+        });
+        let result = tool.call(input, &ctx).await.unwrap();
+        assert!(!result.is_error);
+        assert!(result.output.contains("3 occurrences"));
+
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(content, "xxx bbb xxx ccc xxx");
+    }
+
+    #[tokio::test]
+    async fn test_edit_multiple_matches_without_replace_all_fails() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.txt");
+        std::fs::write(&path, "foo bar foo baz").unwrap();
+
+        let tool = EditTool;
+        let ctx = crate::ToolContext {
+            cwd: dir.path().to_string_lossy().to_string(),
+            interactive: false,
+        };
+        let input = serde_json::json!({
+            "file_path": path.to_string_lossy(),
+            "old_string": "foo",
+            "new_string": "qux"
+        });
+        let result = tool.call(input, &ctx).await.unwrap();
+        assert!(result.is_error);
+        assert!(result.output.contains("2 matches"));
+    }
+}

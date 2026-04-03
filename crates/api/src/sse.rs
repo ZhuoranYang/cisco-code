@@ -170,4 +170,85 @@ mod tests {
         let frames = parser.push(b"event: ping\ndata: {}\n\n").unwrap();
         assert!(frames.is_empty());
     }
+
+    #[test]
+    fn test_multiple_frames_in_one_push() {
+        let mut parser = SseParser::new();
+        let chunk = b"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"m1\"}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\"}}\n\n";
+        let frames = parser.push(chunk).unwrap();
+        assert_eq!(frames.len(), 2);
+        assert_eq!(frames[0].event.as_deref(), Some("message_start"));
+        assert_eq!(frames[1].event.as_deref(), Some("content_block_start"));
+    }
+
+    #[test]
+    fn test_crlf_delimiter() {
+        let mut parser = SseParser::new();
+        let chunk = b"event: message_stop\r\ndata: {\"type\":\"message_stop\"}\r\n\r\n";
+        let frames = parser.push(chunk).unwrap();
+        assert_eq!(frames.len(), 1);
+        assert_eq!(frames[0].event.as_deref(), Some("message_stop"));
+    }
+
+    #[test]
+    fn test_done_sentinel_filtered() {
+        let mut parser = SseParser::new();
+        let frames = parser.push(b"data: [DONE]\n\n").unwrap();
+        assert!(frames.is_empty());
+    }
+
+    #[test]
+    fn test_sse_comment_ignored() {
+        let mut parser = SseParser::new();
+        let chunk = b": this is a comment\nevent: ping\ndata: {}\n\n";
+        let frames = parser.push(chunk).unwrap();
+        assert!(frames.is_empty()); // ping is filtered
+    }
+
+    #[test]
+    fn test_data_only_frame_no_event() {
+        let mut parser = SseParser::new();
+        let chunk = b"data: {\"type\":\"message_stop\"}\n\n";
+        let frames = parser.push(chunk).unwrap();
+        assert_eq!(frames.len(), 1);
+        assert!(frames[0].event.is_none());
+        assert_eq!(frames[0].data, "{\"type\":\"message_stop\"}");
+    }
+
+    #[test]
+    fn test_empty_buffer_no_crash() {
+        let mut parser = SseParser::new();
+        let frames = parser.push(b"").unwrap();
+        assert!(frames.is_empty());
+    }
+
+    #[test]
+    fn test_anthropic_stream_event_deserialization() {
+        let json = r#"{"type":"message_start","message":{"id":"msg_123","model":"claude-sonnet-4-6"}}"#;
+        let event: AnthropicStreamEvent = serde_json::from_str(json).unwrap();
+        assert!(matches!(event, AnthropicStreamEvent::MessageStart { .. }));
+
+        let json = r#"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}"#;
+        let event: AnthropicStreamEvent = serde_json::from_str(json).unwrap();
+        assert!(matches!(event, AnthropicStreamEvent::ContentBlockDelta { index: 0, .. }));
+
+        let json = r#"{"type":"error","error":{"type":"overloaded_error","message":"overloaded"}}"#;
+        let event: AnthropicStreamEvent = serde_json::from_str(json).unwrap();
+        assert!(matches!(event, AnthropicStreamEvent::Error { .. }));
+    }
+
+    #[test]
+    fn test_three_byte_partial_reconstruction() {
+        // Simulate receiving data one byte at a time for a small frame
+        let full = b"event: x\ndata: {\"type\":\"message_stop\"}\n\n";
+        let mut parser = SseParser::new();
+
+        for i in 0..full.len() - 1 {
+            let frames = parser.push(&full[i..i + 1]).unwrap();
+            assert!(frames.is_empty(), "got frame too early at byte {i}");
+        }
+        // Push the last byte
+        let frames = parser.push(&full[full.len() - 1..]).unwrap();
+        assert_eq!(frames.len(), 1);
+    }
 }

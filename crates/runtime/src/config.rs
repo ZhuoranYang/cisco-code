@@ -192,3 +192,134 @@ fn dirs_home() -> Option<PathBuf> {
         .ok()
         .map(PathBuf::from)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_config() {
+        let config = RuntimeConfig::default();
+        assert_eq!(config.model, "claude-sonnet-4-6");
+        assert_eq!(config.max_tokens, 16384);
+        assert_eq!(config.max_turns, 50);
+        assert!(config.max_budget_usd.is_none());
+        assert!(config.temperature.is_none());
+    }
+
+    #[test]
+    fn test_load_toml_valid() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(
+            &path,
+            r#"
+[general]
+default_model = "claude-opus-4-6"
+max_tokens = 8192
+max_turns = 10
+temperature = 0.5
+
+[permissions]
+mode = "bypass"
+
+[sandbox]
+mode = "os-native"
+"#,
+        )
+        .unwrap();
+
+        let partial = load_toml(&path).unwrap();
+        let general = partial.general.unwrap();
+        assert_eq!(general.default_model.as_deref(), Some("claude-opus-4-6"));
+        assert_eq!(general.max_tokens, Some(8192));
+        assert_eq!(general.max_turns, Some(10));
+        assert_eq!(general.temperature, Some(0.5));
+        assert_eq!(partial.permissions.unwrap().mode.as_deref(), Some("bypass"));
+        assert_eq!(partial.sandbox.unwrap().mode.as_deref(), Some("os-native"));
+    }
+
+    #[test]
+    fn test_apply_partial() {
+        let mut config = RuntimeConfig::default();
+        let partial = PartialConfig {
+            general: Some(GeneralSection {
+                default_model: Some("gpt-5".into()),
+                max_tokens: Some(2048),
+                max_turns: None,
+                max_budget_usd: Some(5.0),
+                temperature: None,
+            }),
+            permissions: Some(PermissionsSection {
+                mode: Some("accept-reads".into()),
+            }),
+            sandbox: None,
+        };
+
+        config.apply_partial(&partial);
+        assert_eq!(config.model, "gpt-5");
+        assert_eq!(config.max_tokens, 2048);
+        assert_eq!(config.max_turns, 50); // unchanged
+        assert_eq!(config.max_budget_usd, Some(5.0));
+        assert!(matches!(config.permission_mode, PermissionMode::AcceptReads));
+    }
+
+    #[test]
+    fn test_apply_empty_partial_is_noop() {
+        let original = RuntimeConfig::default();
+        let mut config = RuntimeConfig::default();
+        config.apply_partial(&PartialConfig::default());
+
+        assert_eq!(config.model, original.model);
+        assert_eq!(config.max_tokens, original.max_tokens);
+        assert_eq!(config.max_turns, original.max_turns);
+    }
+
+    #[test]
+    fn test_partial_toml_missing_sections() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("minimal.toml");
+        std::fs::write(&path, "[general]\ndefault_model = \"test\"\n").unwrap();
+
+        let partial = load_toml(&path).unwrap();
+        assert!(partial.general.is_some());
+        assert!(partial.permissions.is_none());
+        assert!(partial.sandbox.is_none());
+    }
+
+    #[test]
+    fn test_hierarchical_override() {
+        // Simulate: user config sets model, project config overrides max_tokens
+        let mut config = RuntimeConfig::default();
+
+        let user_partial = PartialConfig {
+            general: Some(GeneralSection {
+                default_model: Some("user-model".into()),
+                max_tokens: Some(4096),
+                max_turns: None,
+                max_budget_usd: None,
+                temperature: None,
+            }),
+            permissions: None,
+            sandbox: None,
+        };
+        config.apply_partial(&user_partial);
+        assert_eq!(config.model, "user-model");
+        assert_eq!(config.max_tokens, 4096);
+
+        let project_partial = PartialConfig {
+            general: Some(GeneralSection {
+                default_model: None,
+                max_tokens: Some(8192),
+                max_turns: None,
+                max_budget_usd: None,
+                temperature: None,
+            }),
+            permissions: None,
+            sandbox: None,
+        };
+        config.apply_partial(&project_partial);
+        assert_eq!(config.model, "user-model"); // not overridden
+        assert_eq!(config.max_tokens, 8192); // overridden
+    }
+}

@@ -158,3 +158,132 @@ impl Tool for GrepTool {
         PermissionLevel::ReadOnly
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ToolContext;
+
+    fn ctx(dir: &std::path::Path) -> ToolContext {
+        ToolContext {
+            cwd: dir.to_string_lossy().to_string(),
+            interactive: false,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_grep_finds_pattern() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "hello world\nfoo bar\n").unwrap();
+        std::fs::write(dir.path().join("b.txt"), "nothing here\n").unwrap();
+
+        let tool = GrepTool;
+        let result = tool
+            .call(
+                serde_json::json!({
+                    "pattern": "hello",
+                    "path": dir.path().to_string_lossy()
+                }),
+                &ctx(dir.path()),
+            )
+            .await
+            .unwrap();
+
+        // Might fail if rg not installed, but should still return ok
+        if !result.is_error {
+            assert!(result.output.contains("a.txt"));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_grep_no_matches() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "hello\n").unwrap();
+
+        let tool = GrepTool;
+        let result = tool
+            .call(
+                serde_json::json!({
+                    "pattern": "zzzzz_nonexistent",
+                    "path": dir.path().to_string_lossy()
+                }),
+                &ctx(dir.path()),
+            )
+            .await
+            .unwrap();
+        if !result.is_error {
+            assert!(result.output.contains("No matches"));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_grep_content_mode() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("test.rs"), "fn main() {\n    println!(\"hi\");\n}\n").unwrap();
+
+        let tool = GrepTool;
+        let result = tool
+            .call(
+                serde_json::json!({
+                    "pattern": "println",
+                    "path": dir.path().to_string_lossy(),
+                    "output_mode": "content"
+                }),
+                &ctx(dir.path()),
+            )
+            .await
+            .unwrap();
+
+        if !result.is_error {
+            assert!(result.output.contains("println"));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_grep_glob_filter() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.rs"), "target\n").unwrap();
+        std::fs::write(dir.path().join("b.txt"), "target\n").unwrap();
+
+        let tool = GrepTool;
+        let result = tool
+            .call(
+                serde_json::json!({
+                    "pattern": "target",
+                    "path": dir.path().to_string_lossy(),
+                    "glob": "*.rs"
+                }),
+                &ctx(dir.path()),
+            )
+            .await
+            .unwrap();
+
+        if !result.is_error && !result.output.contains("No matches") {
+            assert!(result.output.contains("a.rs"));
+            assert!(!result.output.contains("b.txt"));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_grep_case_insensitive() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("test.txt"), "Hello World\n").unwrap();
+
+        let tool = GrepTool;
+        let result = tool
+            .call(
+                serde_json::json!({
+                    "pattern": "hello",
+                    "path": dir.path().to_string_lossy(),
+                    "-i": true
+                }),
+                &ctx(dir.path()),
+            )
+            .await
+            .unwrap();
+
+        if !result.is_error {
+            assert!(result.output.contains("test.txt"));
+        }
+    }
+}

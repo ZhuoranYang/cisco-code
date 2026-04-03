@@ -116,3 +116,98 @@ impl Tool for BashTool {
         PermissionLevel::Execute
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ToolContext;
+
+    fn ctx() -> ToolContext {
+        ToolContext {
+            cwd: "/tmp".into(),
+            interactive: false,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_bash_echo() {
+        let tool = BashTool;
+        let result = tool
+            .call(serde_json::json!({"command": "echo hello"}), &ctx())
+            .await
+            .unwrap();
+        assert!(!result.is_error);
+        assert_eq!(result.output.trim(), "hello");
+    }
+
+    #[tokio::test]
+    async fn test_bash_exit_code_nonzero() {
+        let tool = BashTool;
+        let result = tool
+            .call(serde_json::json!({"command": "exit 42"}), &ctx())
+            .await
+            .unwrap();
+        assert!(result.is_error);
+        assert!(result.output.contains("Exit code 42"));
+    }
+
+    #[tokio::test]
+    async fn test_bash_stderr() {
+        let tool = BashTool;
+        let result = tool
+            .call(
+                serde_json::json!({"command": "echo err >&2"}),
+                &ctx(),
+            )
+            .await
+            .unwrap();
+        // stderr captured but exit code 0 → success
+        assert!(!result.is_error);
+        assert!(result.output.contains("err"));
+    }
+
+    #[tokio::test]
+    async fn test_bash_timeout() {
+        let tool = BashTool;
+        let result = tool
+            .call(
+                serde_json::json!({"command": "sleep 10", "timeout": 500}),
+                &ctx(),
+            )
+            .await
+            .unwrap();
+        assert!(result.is_error);
+        assert!(result.output.contains("timed out"));
+    }
+
+    #[tokio::test]
+    async fn test_bash_cwd() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = ToolContext {
+            cwd: dir.path().to_string_lossy().to_string(),
+            interactive: false,
+        };
+
+        let tool = BashTool;
+        let result = tool
+            .call(serde_json::json!({"command": "pwd"}), &ctx)
+            .await
+            .unwrap();
+        assert!(!result.is_error);
+        // macOS resolves /tmp → /private/tmp, so use canonical comparison
+        let expected = dir.path().canonicalize().unwrap();
+        let actual_path = std::path::Path::new(result.output.trim()).canonicalize().unwrap();
+        assert_eq!(actual_path, expected);
+    }
+
+    #[tokio::test]
+    async fn test_bash_no_output() {
+        let tool = BashTool;
+        let result = tool
+            .call(serde_json::json!({"command": "true"}), &ctx())
+            .await
+            .unwrap();
+        assert!(!result.is_error);
+        assert_eq!(result.output, "(no output)");
+    }
+}

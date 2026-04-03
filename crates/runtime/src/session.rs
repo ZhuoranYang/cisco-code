@@ -137,3 +137,86 @@ pub struct SessionInfo {
     pub path: PathBuf,
     pub modified: std::time::SystemTime,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cisco_code_protocol::{ContentBlock, UserMessage};
+
+    fn make_user_msg(text: &str) -> Message {
+        Message::User(UserMessage {
+            id: uuid::Uuid::new_v4(),
+            content: vec![ContentBlock::Text {
+                text: text.to_string(),
+            }],
+            attachments: None,
+        })
+    }
+
+    #[test]
+    fn test_session_new() {
+        let session = Session::new();
+        assert!(!session.id.is_empty());
+        assert!(session.messages.is_empty());
+    }
+
+    #[test]
+    fn test_session_add_message() {
+        let mut session = Session::new();
+        session.add_message(make_user_msg("hello"));
+        session.add_message(make_user_msg("world"));
+        assert_eq!(session.messages.len(), 2);
+    }
+
+    #[test]
+    fn test_session_persistence_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let sessions_dir = dir.path().join("sessions");
+
+        // Create session and add messages
+        let mut session = Session::with_persistence(&sessions_dir).unwrap();
+        let id = session.id.clone();
+        session.add_message(make_user_msg("first message"));
+        session.add_message(make_user_msg("second message"));
+
+        // Load it back
+        let jsonl_path = sessions_dir.join(format!("{id}.jsonl"));
+        let loaded = Session::load(&jsonl_path).unwrap();
+        assert_eq!(loaded.id, id);
+        assert_eq!(loaded.messages.len(), 2);
+    }
+
+    #[test]
+    fn test_session_list() {
+        let dir = tempfile::tempdir().unwrap();
+        let sessions_dir = dir.path().join("sessions");
+
+        // Create two sessions
+        let mut s1 = Session::with_persistence(&sessions_dir).unwrap();
+        s1.add_message(make_user_msg("s1"));
+
+        let mut s2 = Session::with_persistence(&sessions_dir).unwrap();
+        s2.add_message(make_user_msg("s2"));
+
+        let list = Session::list_sessions(&sessions_dir).unwrap();
+        assert_eq!(list.len(), 2);
+    }
+
+    #[test]
+    fn test_list_sessions_empty_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let list = Session::list_sessions(&dir.path().join("nonexistent")).unwrap();
+        assert!(list.is_empty());
+    }
+
+    #[test]
+    fn test_session_load_malformed_lines_skipped() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.jsonl");
+        std::fs::write(&path, "not valid json\n{\"bad\": \"structure\"}\n").unwrap();
+
+        let loaded = Session::load(&path).unwrap();
+        // Both lines should be skipped (malformed or wrong structure)
+        assert!(loaded.messages.is_empty());
+    }
+}

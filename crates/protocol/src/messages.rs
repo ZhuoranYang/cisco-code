@@ -150,3 +150,118 @@ pub enum StopReason {
     MaxTokens,
     StopSequence,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_token_usage_default() {
+        let usage = TokenUsage::default();
+        assert_eq!(usage.input_tokens, 0);
+        assert_eq!(usage.output_tokens, 0);
+        assert_eq!(usage.total(), 0);
+    }
+
+    #[test]
+    fn test_token_usage_merge() {
+        let mut a = TokenUsage {
+            input_tokens: 100,
+            output_tokens: 50,
+            cache_creation_tokens: 10,
+            cache_read_tokens: 5,
+        };
+        let b = TokenUsage {
+            input_tokens: 200,
+            output_tokens: 100,
+            cache_creation_tokens: 20,
+            cache_read_tokens: 10,
+        };
+        a.merge(&b);
+        assert_eq!(a.input_tokens, 300);
+        assert_eq!(a.output_tokens, 150);
+        assert_eq!(a.total(), 450);
+        assert_eq!(a.cache_creation_tokens, 30);
+        assert_eq!(a.cache_read_tokens, 15);
+    }
+
+    #[test]
+    fn test_tool_result_success() {
+        let result = crate::ToolResult::success("output text");
+        assert_eq!(result.output, "output text");
+        assert!(!result.is_error);
+        assert!(result.injected_messages.is_none());
+    }
+
+    #[test]
+    fn test_tool_result_error() {
+        let result = crate::ToolResult::error("something broke");
+        assert_eq!(result.output, "something broke");
+        assert!(result.is_error);
+    }
+
+    #[test]
+    fn test_message_serialization_roundtrip() {
+        let msg = Message::User(UserMessage {
+            id: Uuid::new_v4(),
+            content: vec![ContentBlock::Text {
+                text: "hello".into(),
+            }],
+            attachments: None,
+        });
+
+        let json = serde_json::to_string(&msg).unwrap();
+        let deserialized: Message = serde_json::from_str(&json).unwrap();
+
+        match deserialized {
+            Message::User(u) => {
+                assert_eq!(u.content.len(), 1);
+                match &u.content[0] {
+                    ContentBlock::Text { text } => assert_eq!(text, "hello"),
+                    _ => panic!("wrong content block type"),
+                }
+            }
+            _ => panic!("wrong message type"),
+        }
+    }
+
+    #[test]
+    fn test_stop_reason_equality() {
+        assert_eq!(StopReason::EndTurn, StopReason::EndTurn);
+        assert_ne!(StopReason::EndTurn, StopReason::ToolUse);
+    }
+
+    #[test]
+    fn test_content_block_tool_use_serialization() {
+        let block = ContentBlock::ToolUse {
+            id: "tu_123".into(),
+            name: "Bash".into(),
+            input: serde_json::json!({"command": "ls"}),
+        };
+        let json = serde_json::to_value(&block).unwrap();
+        assert_eq!(json["type"], "tool_use");
+        assert_eq!(json["name"], "Bash");
+        assert_eq!(json["input"]["command"], "ls");
+    }
+
+    #[test]
+    fn test_assistant_message_with_usage() {
+        let msg = AssistantMessage {
+            id: Uuid::new_v4(),
+            content: vec![ContentBlock::Text {
+                text: "response".into(),
+            }],
+            model: "claude-sonnet-4-6".into(),
+            usage: TokenUsage {
+                input_tokens: 100,
+                output_tokens: 50,
+                ..Default::default()
+            },
+            stop_reason: Some(StopReason::EndTurn),
+        };
+
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("claude-sonnet-4-6"));
+        assert!(json.contains("EndTurn"));
+    }
+}

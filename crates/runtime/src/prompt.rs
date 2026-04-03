@@ -115,3 +115,74 @@ pub fn load_project_instructions(cwd: &str) -> Option<String> {
 
     None
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_prompt_builder_basic() {
+        let prompt = PromptBuilder::new("/tmp/test").build();
+        assert!(prompt.contains("Cisco Code"));
+        assert!(prompt.contains("/tmp/test"));
+        assert!(prompt.contains("Tool Usage"));
+    }
+
+    #[test]
+    fn test_prompt_builder_with_instructions() {
+        let prompt = PromptBuilder::new("/tmp")
+            .with_instructions("Always use snake_case.")
+            .build();
+        assert!(prompt.contains("Project Instructions"));
+        assert!(prompt.contains("Always use snake_case."));
+    }
+
+    #[test]
+    fn test_prompt_builder_without_instructions() {
+        let prompt = PromptBuilder::new("/tmp").build();
+        assert!(!prompt.contains("Project Instructions"));
+    }
+
+    #[test]
+    fn test_prompt_contains_environment_info() {
+        let prompt = PromptBuilder::new("/workspace").build();
+        assert!(prompt.contains("Working directory: /workspace"));
+        assert!(prompt.contains("Platform:"));
+    }
+
+    #[test]
+    fn test_load_project_instructions_cisco_code_md() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("cisco-code.md"), "Custom rules here").unwrap();
+
+        let result = load_project_instructions(&dir.path().to_string_lossy());
+        assert_eq!(result, Some("Custom rules here".to_string()));
+    }
+
+    #[test]
+    fn test_load_project_instructions_claude_md() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("CLAUDE.md"), "Claude rules").unwrap();
+
+        let result = load_project_instructions(&dir.path().to_string_lossy());
+        assert_eq!(result, Some("Claude rules".to_string()));
+    }
+
+    #[test]
+    fn test_load_project_instructions_priority() {
+        let dir = tempfile::tempdir().unwrap();
+        // cisco-code.md takes priority over CLAUDE.md
+        std::fs::write(dir.path().join("cisco-code.md"), "cisco").unwrap();
+        std::fs::write(dir.path().join("CLAUDE.md"), "claude").unwrap();
+
+        let result = load_project_instructions(&dir.path().to_string_lossy());
+        assert_eq!(result, Some("cisco".to_string()));
+    }
+
+    #[test]
+    fn test_load_project_instructions_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let result = load_project_instructions(&dir.path().to_string_lossy());
+        assert!(result.is_none());
+    }
+}

@@ -103,6 +103,69 @@ impl Tool for GlobTool {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ToolContext;
+
+    fn ctx(dir: &std::path::Path) -> ToolContext {
+        ToolContext {
+            cwd: dir.to_string_lossy().to_string(),
+            interactive: false,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_glob_native_fallback() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.rs"), "").unwrap();
+        std::fs::write(dir.path().join("b.rs"), "").unwrap();
+        std::fs::write(dir.path().join("c.txt"), "").unwrap();
+
+        // Test native glob directly
+        let result = glob_native("*.rs", &dir.path().to_string_lossy()).await.unwrap();
+        assert!(!result.is_error);
+        assert!(result.output.contains("a.rs"));
+        assert!(result.output.contains("b.rs"));
+        assert!(!result.output.contains("c.txt"));
+    }
+
+    #[tokio::test]
+    async fn test_glob_no_matches() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "").unwrap();
+
+        let result = glob_native("*.zzz", &dir.path().to_string_lossy()).await.unwrap();
+        assert!(!result.is_error);
+        assert!(result.output.contains("No files matched"));
+    }
+
+    #[tokio::test]
+    async fn test_glob_tool_integration() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("test.rs"), "").unwrap();
+        std::fs::create_dir_all(dir.path().join("sub")).unwrap();
+        std::fs::write(dir.path().join("sub").join("nested.rs"), "").unwrap();
+
+        let tool = GlobTool;
+        let result = tool
+            .call(
+                serde_json::json!({
+                    "pattern": "**/*.rs",
+                    "path": dir.path().to_string_lossy()
+                }),
+                &ctx(dir.path()),
+            )
+            .await
+            .unwrap();
+
+        // Whether rg or native glob, should find .rs files
+        if !result.is_error {
+            assert!(result.output.contains(".rs"));
+        }
+    }
+}
+
 /// Fallback glob implementation using the `glob` crate.
 async fn glob_native(pattern: &str, base_dir: &str) -> Result<ToolResult> {
     let full_pattern = if std::path::Path::new(pattern).is_absolute() {

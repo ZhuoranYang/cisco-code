@@ -70,3 +70,81 @@ impl Tool for WriteTool {
         PermissionLevel::WorkspaceWrite
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ToolContext;
+
+    fn ctx(dir: &std::path::Path) -> ToolContext {
+        ToolContext {
+            cwd: dir.to_string_lossy().to_string(),
+            interactive: false,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_write_new_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("new.txt");
+
+        let tool = WriteTool;
+        let result = tool
+            .call(
+                serde_json::json!({
+                    "file_path": path.to_string_lossy(),
+                    "content": "hello world"
+                }),
+                &ctx(dir.path()),
+            )
+            .await
+            .unwrap();
+
+        assert!(!result.is_error);
+        assert!(result.output.contains("11 bytes"));
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "hello world");
+    }
+
+    #[tokio::test]
+    async fn test_write_creates_parent_dirs() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("a").join("b").join("c").join("deep.txt");
+
+        let tool = WriteTool;
+        let result = tool
+            .call(
+                serde_json::json!({
+                    "file_path": path.to_string_lossy(),
+                    "content": "deep content"
+                }),
+                &ctx(dir.path()),
+            )
+            .await
+            .unwrap();
+
+        assert!(!result.is_error);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "deep content");
+    }
+
+    #[tokio::test]
+    async fn test_write_overwrites_existing() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("existing.txt");
+        std::fs::write(&path, "old content").unwrap();
+
+        let tool = WriteTool;
+        let result = tool
+            .call(
+                serde_json::json!({
+                    "file_path": path.to_string_lossy(),
+                    "content": "new content"
+                }),
+                &ctx(dir.path()),
+            )
+            .await
+            .unwrap();
+
+        assert!(!result.is_error);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "new content");
+    }
+}

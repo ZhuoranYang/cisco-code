@@ -103,3 +103,120 @@ impl Tool for ReadTool {
         PermissionLevel::ReadOnly
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ToolContext;
+
+    fn ctx(dir: &std::path::Path) -> ToolContext {
+        ToolContext {
+            cwd: dir.to_string_lossy().to_string(),
+            interactive: false,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_read_basic_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("hello.txt");
+        std::fs::write(&path, "line one\nline two\nline three\n").unwrap();
+
+        let tool = ReadTool;
+        let result = tool
+            .call(
+                serde_json::json!({"file_path": path.to_string_lossy()}),
+                &ctx(dir.path()),
+            )
+            .await
+            .unwrap();
+
+        assert!(!result.is_error);
+        assert!(result.output.contains("1\tline one"));
+        assert!(result.output.contains("2\tline two"));
+        assert!(result.output.contains("3\tline three"));
+    }
+
+    #[tokio::test]
+    async fn test_read_with_offset_and_limit() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("lines.txt");
+        let content: String = (1..=100).map(|i| format!("line {i}\n")).collect();
+        std::fs::write(&path, &content).unwrap();
+
+        let tool = ReadTool;
+        let result = tool
+            .call(
+                serde_json::json!({
+                    "file_path": path.to_string_lossy(),
+                    "offset": 10,
+                    "limit": 5
+                }),
+                &ctx(dir.path()),
+            )
+            .await
+            .unwrap();
+
+        assert!(!result.is_error);
+        assert!(result.output.contains("11\tline 11"));
+        assert!(result.output.contains("15\tline 15"));
+        assert!(!result.output.contains("16\tline 16"));
+        assert!(result.output.contains("more lines"));
+    }
+
+    #[tokio::test]
+    async fn test_read_nonexistent_file() {
+        let tool = ReadTool;
+        let ctx = ToolContext {
+            cwd: "/tmp".into(),
+            interactive: false,
+        };
+        let result = tool
+            .call(
+                serde_json::json!({"file_path": "/tmp/does_not_exist_xyz.txt"}),
+                &ctx,
+            )
+            .await
+            .unwrap();
+        assert!(result.is_error);
+        assert!(result.output.contains("Failed to read"));
+    }
+
+    #[tokio::test]
+    async fn test_read_empty_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("empty.txt");
+        std::fs::write(&path, "").unwrap();
+
+        let tool = ReadTool;
+        let result = tool
+            .call(
+                serde_json::json!({"file_path": path.to_string_lossy()}),
+                &ctx(dir.path()),
+            )
+            .await
+            .unwrap();
+        assert!(!result.is_error);
+        assert!(result.output.contains("empty"));
+    }
+
+    #[tokio::test]
+    async fn test_read_bom_stripped() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bom.txt");
+        let mut content = vec![0xEF, 0xBB, 0xBF]; // UTF-8 BOM
+        content.extend_from_slice(b"hello");
+        std::fs::write(&path, &content).unwrap();
+
+        let tool = ReadTool;
+        let result = tool
+            .call(
+                serde_json::json!({"file_path": path.to_string_lossy()}),
+                &ctx(dir.path()),
+            )
+            .await
+            .unwrap();
+        assert!(!result.is_error);
+        assert!(result.output.contains("hello"));
+    }
+}
