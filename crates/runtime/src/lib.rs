@@ -11,14 +11,15 @@
 //! Design insight from Claude Code: The runtime manages a rich context including
 //! message history, file state cache, permission rules, and hook pipelines.
 
-pub mod conversation;
-pub mod config;
-pub mod session;
-pub mod permissions;
-pub mod hooks;
-pub mod prompt;
+pub mod channels;
 pub mod compact;
+pub mod config;
+pub mod conversation;
+pub mod hooks;
+pub mod permissions;
+pub mod prompt;
+pub mod session;
 
-pub use conversation::*;
 pub use config::*;
+pub use conversation::*;
 pub use session::Session;
