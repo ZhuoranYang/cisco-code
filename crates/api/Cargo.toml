@@ -1,0 +1,19 @@
+[package]
+name = "cisco-code-api"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cisco-code-protocol = { path = "../protocol" }
+tokio.workspace = true
+futures.workspace = true
+reqwest.workspace = true
+tokio-tungstenite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

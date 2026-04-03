@@ -1,0 +1,18 @@
+[package]
+name = "cisco-code-telemetry"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cisco-code-protocol = { path = "../protocol" }
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true
+chrono.workspace = true
+rusqlite.workspace = true
+
+[lints]
+workspace = true

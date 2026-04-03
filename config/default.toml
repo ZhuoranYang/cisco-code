@@ -1,0 +1,82 @@
+# cisco-code default configuration
+# ================================
+# This file contains the built-in defaults. Override in:
+#   ~/.cisco-code/config.toml (user)
+#   .cisco-code/config.toml (project)
+#   .cisco-code/config.local.toml (machine-local, gitignored)
+
+[general]
+default_provider = "anthropic"
+default_model = "claude-sonnet-4-6"
+plan_mode = "auto"              # off | ask | auto | always
+permission_mode = "default"      # readonly | default | elevated | admin
+max_turns = 50
+max_budget_usd = 10.0
+
+[model_tiers]
+small = "anthropic/claude-haiku-4-5-20251001"
+medium = "anthropic/claude-sonnet-4-6"
+large = "anthropic/claude-opus-4-6"
+teammate = "openai/gpt-5"
+frontier = "anthropic/claude-opus-4-6"
+
+[role_tiers]
+main_agent = "large"
+planner = "large"
+executor = "large"
+reviewer = "teammate"
+compaction = "medium"
+classifier = "small"
+title = "small"
+guardian = "small"
+
+[sandbox]
+mode = "none"                    # none | os-native | container
+network = "full"                 # none | workspace-only | allowlist | full
+allowed_hosts = ["github.com", "pypi.org", "crates.io", "npmjs.com"]
+
+[tools]
+bash_timeout_ms = 120000
+file_read_max_lines = 2000
+web_fetch_max_size_kb = 1024
+
+[session]
+storage_dir = "~/.cisco-code/sessions"
+auto_compact = true
+compact_threshold_tokens = 64000
+
+[memory]
+storage_dir = "~/.cisco-code/memory"
+proactive_injection = true
+max_memory_tokens = 4096
+
+[hooks]
+pre_tool_use = []
+post_tool_use = []
+session_start = []
+session_end = []
+
+[cisco]
+# Webex integration
+# webex_bot_token = ""  # Or CISCO_CODE_WEBEX_TOKEN env var
+# webex_room_id = ""
+
+# SSO
+# sso_provider = "okta"
+# sso_client_id = ""
+
+# Duo MFA
+# duo_integration_key = ""
+# duo_secret_key = ""
+# duo_api_hostname = ""
+
+# Audit
+# audit_endpoint = ""  # Splunk HEC endpoint
+# audit_token = ""
+
+[mcp.servers]
+# Example:
+# [mcp.servers.github]
+# command = "npx"
+# args = ["-y", "@modelcontextprotocol/server-github"]
+# env = { GITHUB_TOKEN = "" }

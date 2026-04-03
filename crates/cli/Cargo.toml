@@ -1,0 +1,28 @@
+[package]
+name = "cisco-code"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "cisco-code"
+path = "src/main.rs"
+
+[dependencies]
+cisco-code-runtime = { path = "../runtime" }
+cisco-code-protocol = { path = "../protocol" }
+cisco-code-tools = { path = "../tools" }
+cisco-code-api = { path = "../api" }
+cisco-code-telemetry = { path = "../telemetry" }
+tokio.workspace = true
+clap.workspace = true
+ratatui.workspace = true
+crossterm.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true
+dirs-next = "2"
+
+[lints]
+workspace = true

@@ -1,0 +1,24 @@
+[package]
+name = "cisco-code-runtime"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cisco-code-protocol = { path = "../protocol" }
+cisco-code-api = { path = "../api" }
+cisco-code-tools = { path = "../tools" }
+cisco-code-sandbox = { path = "../sandbox" }
+tokio.workspace = true
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+tracing.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+rusqlite.workspace = true
+
+[lints]
+workspace = true
