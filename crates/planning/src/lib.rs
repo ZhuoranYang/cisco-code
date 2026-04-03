@@ -1,22 +1,12 @@
-//! cisco-code-planning: DAG-based task planning engine in pure Rust.
+//! cisco-code-planning: Plan mode (DEPRECATED for now).
 //!
-//! Design insight from Astro-Assistant: Two-level architecture where complex tasks
-//! are decomposed into a DAG of subtasks, executed in parallel waves, with adaptive
-//! replanning on failure. Simple tasks skip planning and go direct to ReAct.
+//! Plan mode is deferred — use Claude Code's built-in plan mode instead.
+//! This crate is kept as a placeholder for future implementation if needed.
 //!
-//! Uses petgraph for DAG operations (topological sort, parallel wave extraction).
-//! The LLM generates plans via HTTP API calls — no Python needed.
+//! The original design called for DAG-based task planning (from Astro-Assistant),
+//! but the simpler ReAct loop in the agent turn loop handles most use cases well.
 
-/// Placeholder for Phase 5 implementation.
-/// Will include:
-/// - TaskDAG (petgraph-based directed acyclic graph)
-/// - Classifier (lightweight LLM call to determine complexity)
-/// - Planner (LLM generates structured plan → DAG)
-/// - Executor (parallel wave execution with scoped contexts)
-/// - Replanner (adaptive replanning on failure/milestone)
+// Placeholder structs kept for compilation; no active development.
 
 pub struct TaskDag;
-pub struct Classifier;
 pub struct Planner;
-pub struct WaveExecutor;
-pub struct Replanner;
