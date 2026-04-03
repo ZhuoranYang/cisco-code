@@ -7,6 +7,7 @@ use anyhow::Result;
 use cisco_code_protocol::{PermissionLevel, ToolDefinition, ToolMetadata, ToolResult, ToolSource};
 
 pub mod bash;
+pub mod cisco;
 pub mod edit;
 pub mod glob;
 pub mod grep;
@@ -85,12 +86,16 @@ impl ToolRegistry {
     /// Create registry with all built-in tools.
     pub fn with_builtins() -> Result<Self> {
         let mut registry = Self::new();
+        // Core tools
         registry.register(Arc::new(bash::BashTool))?;
         registry.register(Arc::new(read::ReadTool))?;
         registry.register(Arc::new(write::WriteTool))?;
         registry.register(Arc::new(edit::EditTool))?;
         registry.register(Arc::new(grep::GrepTool))?;
         registry.register(Arc::new(glob::GlobTool))?;
+        // Cisco/enterprise tools
+        registry.register(Arc::new(cisco::WebexTool))?;
+        registry.register(Arc::new(cisco::SlackTool))?;
         Ok(registry)
     }
 }
@@ -112,18 +117,22 @@ mod tests {
     }
 
     #[test]
-    fn test_with_builtins_has_six_tools() {
+    fn test_with_builtins_has_all_tools() {
         let reg = ToolRegistry::with_builtins().unwrap();
         let defs = reg.definitions();
-        assert_eq!(defs.len(), 6);
+        assert_eq!(defs.len(), 8);
 
         let names: Vec<&str> = defs.iter().map(|d| d.name.as_str()).collect();
+        // Core tools
         assert!(names.contains(&"Bash"));
         assert!(names.contains(&"Read"));
         assert!(names.contains(&"Write"));
         assert!(names.contains(&"Edit"));
         assert!(names.contains(&"Grep"));
         assert!(names.contains(&"Glob"));
+        // Cisco/enterprise tools
+        assert!(names.contains(&"Webex"));
+        assert!(names.contains(&"Slack"));
     }
 
     #[test]

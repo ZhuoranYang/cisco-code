@@ -8,13 +8,15 @@ cisco-code-protocol = { path = "../protocol" }
 tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+reqwest.workspace = true
 glob.workspace = true
 regex.workspace = true
-tempfile.workspace = true
 tracing.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
-rusqlite.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true
