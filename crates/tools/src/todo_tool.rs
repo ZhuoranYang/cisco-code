@@ -43,6 +43,7 @@ impl std::fmt::Display for TodoStatus {
     }
 }
 
+#[async_trait::async_trait]
 impl Tool for TodoWriteTool {
     fn name(&self) -> &str {
         "TodoWrite"

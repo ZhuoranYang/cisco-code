@@ -7,9 +7,8 @@
 //! session, model config, and conversation loop. Results are returned as a single
 //! message to the parent agent.
 
-use anyhow::Result;
 use cisco_code_api::{AssistantEvent, CompletionRequest, Provider};
-use cisco_code_protocol::{ContentBlock, Message, StopReason, TokenUsage};
+use cisco_code_protocol::{StopReason, TokenUsage};
 use uuid::Uuid;
 
 use crate::hooks::{HookEvent, HookInput, HookRunner};

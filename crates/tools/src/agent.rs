@@ -15,6 +15,7 @@ pub struct AgentTool;
 const VALID_SUBAGENT_TYPES: &[&str] = &["general-purpose", "Explore", "Plan"];
 const VALID_ISOLATION_MODES: &[&str] = &["worktree"];
 
+#[async_trait::async_trait]
 impl Tool for AgentTool {
     fn name(&self) -> &str {
         "Agent"

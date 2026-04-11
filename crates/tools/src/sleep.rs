@@ -14,6 +14,7 @@ pub struct SleepTool;
 /// Maximum sleep duration in seconds (10 minutes).
 const MAX_DURATION_SECS: u64 = 600;
 
+#[async_trait::async_trait]
 impl Tool for SleepTool {
     fn name(&self) -> &str {
         "Sleep"

@@ -26,6 +26,7 @@ const POSITION_ACTIONS: &[&str] = &["goToDefinition", "findReferences", "hover"]
 
 pub struct LspTool;
 
+#[async_trait::async_trait]
 impl Tool for LspTool {
     fn name(&self) -> &str {
         "LSP"

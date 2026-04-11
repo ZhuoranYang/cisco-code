@@ -16,7 +16,7 @@ use std::path::Path;
 use anyhow::Result;
 use cisco_code_api::{ApiMessage, AssistantEvent, CompletionRequest, Provider};
 use cisco_code_protocol::{
-    ContentBlock, Message, SystemMessage, SystemMessageType, TokenUsage,
+    ContentBlock, Message, SystemMessage, SystemMessageType,
 };
 use uuid::Uuid;
 
@@ -114,6 +114,7 @@ impl Compactor {
                     t.tool_name.len() as u64 + t.input.to_string().len() as u64
                 }
                 Message::ToolResult(r) => r.content.len() as u64,
+                Message::CompactBoundary(cb) => cb.summary.len() as u64,
             };
         }
         // ~4 chars per token, rounded up
@@ -534,6 +535,9 @@ fn render_messages_for_summary(messages: &[Message]) -> String {
             }
             Message::ToolUse(t) => {
                 lines.push(format!("  [tool_use: {}]", t.tool_name));
+            }
+            Message::CompactBoundary(cb) => {
+                lines.push(format!("[compacted {} messages: {}]", cb.compacted_message_count, cb.summary));
             }
         }
     }

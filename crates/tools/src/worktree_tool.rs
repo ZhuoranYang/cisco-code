@@ -10,6 +10,7 @@ use crate::{Tool, ToolContext};
 
 pub struct EnterWorktreeTool;
 
+#[async_trait::async_trait]
 impl Tool for EnterWorktreeTool {
     fn name(&self) -> &str {
         "EnterWorktree"
@@ -58,6 +59,7 @@ impl Tool for EnterWorktreeTool {
 
 pub struct ExitWorktreeTool;
 
+#[async_trait::async_trait]
 impl Tool for ExitWorktreeTool {
     fn name(&self) -> &str {
         "ExitWorktree"
@@ -99,6 +101,7 @@ impl Tool for ExitWorktreeTool {
 /// AskUserQuestion tool — prompt the user for input.
 pub struct AskUserQuestionTool;
 
+#[async_trait::async_trait]
 impl Tool for AskUserQuestionTool {
     fn name(&self) -> &str {
         "AskUserQuestion"

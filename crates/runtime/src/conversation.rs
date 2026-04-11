@@ -39,6 +39,23 @@ use crate::prompt::{
 use crate::session::Session;
 use crate::store::Store;
 
+/// Trait for resolving permission requests interactively.
+///
+/// The CLI implements this via TUI prompts; the server implements it via
+/// WebSocket messages. In headless/SDK mode, no resolver is set and
+/// permission requests are auto-denied for safety.
+#[async_trait::async_trait]
+pub trait PermissionResolver: Send + Sync {
+    /// Ask the user whether to allow a tool execution.
+    /// Returns `true` if approved, `false` if denied.
+    async fn resolve(
+        &self,
+        tool_use_id: &str,
+        tool_name: &str,
+        input_summary: &str,
+    ) -> bool;
+}
+
 /// The core conversation runtime.
 ///
 /// Generic over `P: Provider` (LLM backend) for testability and swappability.
@@ -63,6 +80,9 @@ pub struct ConversationRuntime<P: Provider> {
     /// These are appended as `<system-reminder>` tags to the last user
     /// message in `build_api_messages()`, then drained.
     pending_reminders: Vec<String>,
+    /// Optional interactive permission resolver. When `None`, permission
+    /// requests that require user approval are auto-denied (safe default).
+    permission_resolver: Option<Arc<dyn PermissionResolver>>,
 }
 
 impl<P: Provider> ConversationRuntime<P> {
@@ -85,6 +105,7 @@ impl<P: Provider> ConversationRuntime<P> {
             scratchpad_dir,
             store: None,
             pending_reminders: Vec::new(),
+            permission_resolver: None,
         }
     }
 
@@ -107,6 +128,7 @@ impl<P: Provider> ConversationRuntime<P> {
             scratchpad_dir,
             store: None,
             pending_reminders: Vec::new(),
+            permission_resolver: None,
         }
     }
 
@@ -169,12 +191,23 @@ impl<P: Provider> ConversationRuntime<P> {
             scratchpad_dir,
             store: Some(store),
             pending_reminders: Vec::new(),
+            permission_resolver: None,
         })
     }
 
     /// Set a persistent store on an existing runtime.
     pub fn set_store(&mut self, store: Arc<dyn Store>) {
         self.store = Some(store);
+    }
+
+    /// Set an interactive permission resolver for this runtime.
+    ///
+    /// When set, the runtime will ask the resolver for approval before
+    /// executing dangerous commands, writing to sensitive paths, or when
+    /// the permission engine returns `Ask`. Without a resolver, these
+    /// cases are auto-denied for safety.
+    pub fn set_permission_resolver(&mut self, resolver: Arc<dyn PermissionResolver>) {
+        self.permission_resolver = Some(resolver);
     }
 
     /// Persist a message to the store (if present). Logs errors but does not
@@ -626,6 +659,11 @@ impl<P: Provider> ConversationRuntime<P> {
                             // Hook explicitly approved — skip the permission engine
                             skip_permission_check = true;
                         }
+                        HookResult::ApproveWithModifiedInput(modified) => {
+                            // Hook approved AND modified the input
+                            skip_permission_check = true;
+                            effective_input = modified;
+                        }
                         HookResult::Deny { reason } => {
                             emit!(StreamEvent::ToolResult {
                                 tool_use_id: tool_id.clone(),
@@ -680,38 +718,80 @@ impl<P: Provider> ConversationRuntime<P> {
                         let input_summary =
                             summarize_tool_input(tool_name, &effective_input);
 
-                        // Hard safety checks (never skipped)
+                        // Hard safety checks (never skipped).
+                        // These BLOCK execution until resolved — either via the
+                        // interactive permission resolver or auto-deny in headless mode.
+                        let mut safety_denied = false;
                         if tool_name == "Bash" {
                             if let Some(warning) =
                                 crate::permissions::detect_dangerous_command(
                                     &input_summary,
                                 )
                             {
+                                let summary = format!(
+                                    "⚠ {warning}. Command: {input_summary}"
+                                );
                                 emit!(StreamEvent::PermissionRequest {
                                     tool_use_id: tool_id.clone(),
                                     tool_name: tool_name.clone(),
-                                    input_summary: format!(
-                                        "⚠ {warning}. Command: {input_summary}"
-                                    ),
+                                    input_summary: summary.clone(),
                                 });
-                                // TODO: await user response in interactive mode
+                                let approved = match &self.permission_resolver {
+                                    Some(resolver) => {
+                                        resolver.resolve(&tool_id, tool_name, &summary).await
+                                    }
+                                    None => false, // auto-deny in headless mode
+                                };
+                                if !approved {
+                                    safety_denied = true;
+                                }
                             }
                         }
-                        if matches!(tool_name.as_str(), "Write" | "Edit") {
+                        if !safety_denied && matches!(tool_name.as_str(), "Write" | "Edit") {
                             if let Some(warning) =
                                 crate::permissions::detect_sensitive_path(
                                     &input_summary,
                                 )
                             {
+                                let summary = format!(
+                                    "⚠ {warning}: {input_summary}"
+                                );
                                 emit!(StreamEvent::PermissionRequest {
                                     tool_use_id: tool_id.clone(),
                                     tool_name: tool_name.clone(),
-                                    input_summary: format!(
-                                        "⚠ {warning}: {input_summary}"
-                                    ),
+                                    input_summary: summary.clone(),
                                 });
-                                // TODO: await user response in interactive mode
+                                let approved = match &self.permission_resolver {
+                                    Some(resolver) => {
+                                        resolver.resolve(&tool_id, tool_name, &summary).await
+                                    }
+                                    None => false, // auto-deny in headless mode
+                                };
+                                if !approved {
+                                    safety_denied = true;
+                                }
                             }
+                        }
+                        if safety_denied {
+                            let reason = "Blocked by safety check: user denied or no interactive resolver";
+                            self.permissions
+                                .denial_tracker_mut()
+                                .record_denial(tool_name);
+                            emit!(StreamEvent::ToolResult {
+                                tool_use_id: tool_id.clone(),
+                                result: format!("Permission denied: {reason}"),
+                                is_error: true,
+                            });
+                            let result_msg = Message::ToolResult(ToolResultMessage {
+                                id: Uuid::new_v4(),
+                                tool_use_id: tool_id.clone(),
+                                content: format!("Permission denied: {reason}"),
+                                is_error: true,
+                                injected_messages: None,
+                            });
+                            self.session.add_message(result_msg.clone());
+                            self.persist_message(&result_msg).await;
+                            continue;
                         }
 
                         // Mode-based permission check (skipped if hook approved)
@@ -736,7 +816,43 @@ impl<P: Provider> ConversationRuntime<P> {
                                         tool_name: tool_name.clone(),
                                         input_summary: input_summary.clone(),
                                     });
-                                    // TODO: await user response in interactive mode
+                                    // Ask the permission resolver; auto-deny in headless mode
+                                    let approved = match &self.permission_resolver {
+                                        Some(resolver) => {
+                                            resolver
+                                                .resolve(&tool_id, tool_name, &input_summary)
+                                                .await
+                                        }
+                                        None => false,
+                                    };
+                                    if approved {
+                                        // Record session approval so we don't ask again
+                                        self.permissions.approve_specific(
+                                            tool_name,
+                                            &input_summary,
+                                        );
+                                    } else {
+                                        self.permissions
+                                            .denial_tracker_mut()
+                                            .record_denial(tool_name);
+                                        emit!(StreamEvent::ToolResult {
+                                            tool_use_id: tool_id.clone(),
+                                            result: "Permission denied by user".to_string(),
+                                            is_error: true,
+                                        });
+                                        let result_msg =
+                                            Message::ToolResult(ToolResultMessage {
+                                                id: Uuid::new_v4(),
+                                                tool_use_id: tool_id.clone(),
+                                                content: "Permission denied by user"
+                                                    .to_string(),
+                                                is_error: true,
+                                                injected_messages: None,
+                                            });
+                                        self.session.add_message(result_msg.clone());
+                                        self.persist_message(&result_msg).await;
+                                        continue;
+                                    }
                                 }
                                 PermissionDecision::Deny { reason } => {
                                     self.permissions
@@ -774,6 +890,8 @@ impl<P: Provider> ConversationRuntime<P> {
                         description: format!("Executing {tool_name}"),
                     });
 
+                    // Clone before moving into execute() — needed for post-tool hooks
+                    let effective_input_snapshot = effective_input.clone();
                     let result = self
                         .tools
                         .execute(tool_name, effective_input, &tool_ctx)
@@ -791,7 +909,7 @@ impl<P: Provider> ConversationRuntime<P> {
                         event: HookEvent::PostToolUse,
                         session_id: self.session.id.clone(),
                         tool_name: Some(tool_name.clone()),
-                        tool_input: Some(effective_input.clone()),
+                        tool_input: Some(effective_input_snapshot.clone()),
                         tool_result: Some(tool_result.output.clone()),
                         is_error: Some(tool_result.is_error),
                         subagent_id: None,
@@ -811,7 +929,7 @@ impl<P: Provider> ConversationRuntime<P> {
                             "Write" | "Edit" | "ApplyPatch"
                         )
                     {
-                        let file_path = effective_input["file_path"]
+                        let file_path = effective_input_snapshot["file_path"]
                             .as_str()
                             .map(|s| s.to_string());
                         let file_op = match tool_name.as_str() {

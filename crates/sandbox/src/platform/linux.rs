@@ -5,7 +5,6 @@
 //! and devirtualize the rest.
 
 use anyhow::Result;
-use std::collections::HashMap;
 
 use crate::{CommandSpec, FilesystemPolicy, NetworkPolicy, SandboxMethod, SandboxedCommand};
 

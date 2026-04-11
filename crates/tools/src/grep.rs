@@ -13,6 +13,7 @@ use crate::{Tool, ToolContext};
 
 pub struct GrepTool;
 
+#[async_trait::async_trait]
 impl Tool for GrepTool {
     fn name(&self) -> &str {
         "Grep"

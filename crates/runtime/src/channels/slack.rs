@@ -11,7 +11,7 @@
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
-use super::{Channel, IncomingMessage, MessageStream, OutgoingResponse, StatusUpdate};
+use super::{Channel, IncomingMessage, MessageStream, OutgoingResponse};
 
 const SLACK_API_BASE: &str = "https://slack.com/api";
 
@@ -105,6 +105,7 @@ impl SlackChannel {
     }
 }
 
+#[async_trait::async_trait]
 impl Channel for SlackChannel {
     fn name(&self) -> &str {
         "slack"

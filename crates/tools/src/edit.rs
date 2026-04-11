@@ -13,6 +13,7 @@ use crate::{Tool, ToolContext};
 
 pub struct EditTool;
 
+#[async_trait::async_trait]
 impl Tool for EditTool {
     fn name(&self) -> &str {
         "Edit"

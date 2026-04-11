@@ -4,7 +4,6 @@
 //! stored in `.cisco-code/memory/` with a MEMORY.md index file.
 //! Memory types: user, feedback, project, reference.
 
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;

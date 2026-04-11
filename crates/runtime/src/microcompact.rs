@@ -9,8 +9,7 @@
 //! 2. **Full** (80% threshold): LLM summarization (handled by `Compactor`)
 //! 3. **Emergency** (90% threshold): Aggressive compaction with fewer preserved messages
 
-use cisco_code_protocol::{ContentBlock, Message, ToolResultMessage};
-use uuid::Uuid;
+use cisco_code_protocol::Message;
 
 /// Configuration for micro-compaction.
 #[derive(Debug, Clone)]
@@ -83,7 +82,7 @@ impl MicroCompactor {
         let mut truncated = 0;
 
         for msg in messages.iter_mut() {
-            if let Message::ToolResult(ref mut result) = msg {
+            if let Message::ToolResult(result) = msg {
                 if result.content.len() > self.config.max_chars_per_result
                     && result.content != self.config.cleared_placeholder
                 {

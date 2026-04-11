@@ -37,6 +37,7 @@ impl Default for ReplChannel {
     }
 }
 
+#[async_trait::async_trait]
 impl Channel for ReplChannel {
     fn name(&self) -> &str {
         "repl"

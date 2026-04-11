@@ -7,7 +7,6 @@
 //! `ProviderFactory` wraps the existing `ProviderRegistry` from the providers
 //! crate, exposing a simple `create(model)` method suitable for server use.
 
-use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;

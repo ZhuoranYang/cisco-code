@@ -63,6 +63,7 @@ impl McpTool {
     }
 }
 
+#[async_trait::async_trait]
 impl Tool for McpTool {
     fn name(&self) -> &str {
         &self.prefixed_name
@@ -100,6 +101,7 @@ impl Tool for McpTool {
 /// Static MCP resource tools (ListMcpResources, ReadMcpResource).
 pub struct ListMcpResourcesTool;
 
+#[async_trait::async_trait]
 impl Tool for ListMcpResourcesTool {
     fn name(&self) -> &str {
         "ListMcpResources"
@@ -142,6 +144,7 @@ impl Tool for ListMcpResourcesTool {
 
 pub struct ReadMcpResourceTool;
 
+#[async_trait::async_trait]
 impl Tool for ReadMcpResourceTool {
     fn name(&self) -> &str {
         "ReadMcpResource"

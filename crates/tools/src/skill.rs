@@ -11,6 +11,7 @@ use crate::{Tool, ToolContext};
 
 pub struct SkillTool;
 
+#[async_trait::async_trait]
 impl Tool for SkillTool {
     fn name(&self) -> &str {
         "Skill"

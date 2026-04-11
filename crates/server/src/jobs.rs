@@ -4,7 +4,6 @@
 //! Jobs have lifecycle states and produce streaming events.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

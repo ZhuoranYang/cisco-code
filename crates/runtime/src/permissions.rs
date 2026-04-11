@@ -12,6 +12,7 @@
 //! execution is allowed, denied, or needs user confirmation.
 
 use std::collections::HashSet;
+use std::sync::LazyLock;
 use std::time::Instant;
 
 use cisco_code_protocol::PermissionLevel;
@@ -125,13 +126,27 @@ const SENSITIVE_PATH_PATTERNS: &[&str] = &[
     r"/etc/(passwd|shadow|sudoers)",
 ];
 
+/// Pre-compiled dangerous command regexes (compiled once, reused on every call).
+static COMPILED_DANGEROUS_PATTERNS: LazyLock<Vec<(Regex, &'static str)>> = LazyLock::new(|| {
+    DANGEROUS_BASH_PATTERNS
+        .iter()
+        .filter_map(|p| Regex::new(p).ok().map(|re| (re, *p)))
+        .collect()
+});
+
+/// Pre-compiled sensitive path regexes (compiled once, reused on every call).
+static COMPILED_SENSITIVE_PATTERNS: LazyLock<Vec<(Regex, &'static str)>> = LazyLock::new(|| {
+    SENSITIVE_PATH_PATTERNS
+        .iter()
+        .filter_map(|p| Regex::new(p).ok().map(|re| (re, *p)))
+        .collect()
+});
+
 /// Check if a command contains dangerous patterns.
 pub fn detect_dangerous_command(command: &str) -> Option<String> {
-    for pattern in DANGEROUS_BASH_PATTERNS {
-        if let Ok(re) = Regex::new(pattern) {
-            if re.is_match(command) {
-                return Some(format!("Dangerous command detected: matches pattern `{pattern}`"));
-            }
+    for (re, pattern) in COMPILED_DANGEROUS_PATTERNS.iter() {
+        if re.is_match(command) {
+            return Some(format!("Dangerous command detected: matches pattern `{pattern}`"));
         }
     }
     None
@@ -139,11 +154,9 @@ pub fn detect_dangerous_command(command: &str) -> Option<String> {
 
 /// Check if a file path is sensitive.
 pub fn detect_sensitive_path(path: &str) -> Option<String> {
-    for pattern in SENSITIVE_PATH_PATTERNS {
-        if let Ok(re) = Regex::new(pattern) {
-            if re.is_match(path) {
-                return Some(format!("Sensitive file path: matches `{pattern}`"));
-            }
+    for (re, pattern) in COMPILED_SENSITIVE_PATTERNS.iter() {
+        if re.is_match(path) {
+            return Some(format!("Sensitive file path: matches `{pattern}`"));
         }
     }
     None

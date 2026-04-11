@@ -13,6 +13,7 @@ use crate::{Tool, ToolContext};
 
 pub struct GlobTool;
 
+#[async_trait::async_trait]
 impl Tool for GlobTool {
     fn name(&self) -> &str {
         "Glob"

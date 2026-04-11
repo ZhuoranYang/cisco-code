@@ -12,7 +12,7 @@ use crate::jsonrpc::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
 use crate::types::McpTransport;
 
 /// Trait for sending/receiving JSON-RPC messages.
-#[allow(async_fn_in_trait)]
+#[async_trait::async_trait]
 pub trait Transport: Send + Sync {
     /// Send a request and wait for the corresponding response.
     async fn request(&self, req: JsonRpcRequest) -> Result<JsonRpcResponse>;
@@ -114,6 +114,7 @@ impl StdioTransport {
     }
 }
 
+#[async_trait::async_trait]
 impl Transport for StdioTransport {
     async fn request(&self, req: JsonRpcRequest) -> Result<JsonRpcResponse> {
         let json = serde_json::to_string(&req)?;
@@ -165,6 +166,7 @@ impl HttpTransport {
     }
 }
 
+#[async_trait::async_trait]
 impl Transport for HttpTransport {
     async fn request(&self, req: JsonRpcRequest) -> Result<JsonRpcResponse> {
         let mut builder = self

@@ -12,6 +12,7 @@ use crate::{Tool, ToolContext};
 
 pub struct ReadTool;
 
+#[async_trait::async_trait]
 impl Tool for ReadTool {
     fn name(&self) -> &str {
         "Read"

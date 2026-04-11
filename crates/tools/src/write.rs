@@ -9,6 +9,7 @@ use crate::{Tool, ToolContext};
 
 pub struct WriteTool;
 
+#[async_trait::async_trait]
 impl Tool for WriteTool {
     fn name(&self) -> &str {
         "Write"

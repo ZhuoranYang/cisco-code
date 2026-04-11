@@ -56,6 +56,7 @@ fn is_html_content(content_type: Option<&str>, body: &str) -> bool {
         || trimmed.starts_with("<html")
 }
 
+#[async_trait::async_trait]
 impl Tool for WebFetchTool {
     fn name(&self) -> &str {
         "WebFetch"

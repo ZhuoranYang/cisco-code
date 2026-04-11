@@ -11,6 +11,7 @@ use crate::{Tool, ToolContext};
 
 pub struct TaskCreateTool;
 
+#[async_trait::async_trait]
 impl Tool for TaskCreateTool {
     fn name(&self) -> &str {
         "TaskCreate"
@@ -53,6 +54,7 @@ impl Tool for TaskCreateTool {
 
 pub struct TaskUpdateTool;
 
+#[async_trait::async_trait]
 impl Tool for TaskUpdateTool {
     fn name(&self) -> &str {
         "TaskUpdate"
@@ -119,6 +121,7 @@ impl Tool for TaskUpdateTool {
 
 pub struct TaskListTool;
 
+#[async_trait::async_trait]
 impl Tool for TaskListTool {
     fn name(&self) -> &str {
         "TaskList"
@@ -162,6 +165,7 @@ impl Tool for TaskListTool {
 
 pub struct TaskGetTool;
 
+#[async_trait::async_trait]
 impl Tool for TaskGetTool {
     fn name(&self) -> &str {
         "TaskGet"
@@ -208,6 +212,7 @@ impl Tool for TaskGetTool {
 
 pub struct TaskOutputTool;
 
+#[async_trait::async_trait]
 impl Tool for TaskOutputTool {
     fn name(&self) -> &str {
         "TaskOutput"
@@ -254,6 +259,7 @@ impl Tool for TaskOutputTool {
 
 pub struct TaskStopTool;
 
+#[async_trait::async_trait]
 impl Tool for TaskStopTool {
     fn name(&self) -> &str {
         "TaskStop"

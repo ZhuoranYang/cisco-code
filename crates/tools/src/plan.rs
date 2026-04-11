@@ -13,6 +13,7 @@ use crate::{Tool, ToolContext};
 /// Enter plan mode — switch to planning/design focus.
 pub struct EnterPlanModeTool;
 
+#[async_trait::async_trait]
 impl Tool for EnterPlanModeTool {
     fn name(&self) -> &str {
         "EnterPlanMode"
@@ -57,6 +58,7 @@ impl Tool for EnterPlanModeTool {
 /// Exit plan mode — return to normal execution.
 pub struct ExitPlanModeTool;
 
+#[async_trait::async_trait]
 impl Tool for ExitPlanModeTool {
     fn name(&self) -> &str {
         "ExitPlanMode"

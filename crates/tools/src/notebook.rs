@@ -56,6 +56,7 @@ fn make_cell(cell_type: &str, source: &str) -> serde_json::Value {
     }
 }
 
+#[async_trait::async_trait]
 impl Tool for NotebookEditTool {
     fn name(&self) -> &str {
         "NotebookEdit"

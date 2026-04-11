@@ -433,7 +433,7 @@ mod tests {
 
     #[test]
     fn test_channel_config_slack() {
-        let json = r#"{"type": "slack", "webhook_url": "https://hooks.slack.com/services/T/B/x", "channel": "#alerts"}"#;
+        let json = r##"{"type": "slack", "webhook_url": "https://hooks.slack.com/services/T/B/x", "channel": "#alerts"}"##;
         let channel: NotificationChannel = serde_json::from_str(json).unwrap();
         assert!(matches!(channel, NotificationChannel::Slack { .. }));
     }

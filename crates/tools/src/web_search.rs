@@ -73,6 +73,7 @@ fn format_results(results: &[SearchResult]) -> String {
     out
 }
 
+#[async_trait::async_trait]
 impl Tool for WebSearchTool {
     fn name(&self) -> &str {
         "WebSearch"

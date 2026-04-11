@@ -110,7 +110,7 @@ pub enum StatusUpdate {
 ///
 /// Every input source implements this trait. The agent loop consumes
 /// messages from all channels uniformly.
-#[allow(async_fn_in_trait)]
+#[async_trait::async_trait]
 pub trait Channel: Send + Sync {
     /// Get the channel name (e.g., "repl", "webex", "slack").
     fn name(&self) -> &str;

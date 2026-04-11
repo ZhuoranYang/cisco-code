@@ -13,6 +13,7 @@ use crate::{Tool, ToolContext};
 
 pub struct ApplyPatchTool;
 
+#[async_trait::async_trait]
 impl Tool for ApplyPatchTool {
     fn name(&self) -> &str {
         "ApplyPatch"

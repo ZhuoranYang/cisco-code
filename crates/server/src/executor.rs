@@ -12,7 +12,6 @@
 
 use std::sync::Arc;
 
-use anyhow::Result;
 use cisco_code_api::Provider;
 use cisco_code_protocol::StreamEvent;
 use cisco_code_runtime::{ConversationRuntime, RuntimeConfig, Store};

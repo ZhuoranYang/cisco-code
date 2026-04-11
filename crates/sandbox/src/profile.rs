@@ -4,7 +4,7 @@
 //! reusable configurations. Tool authors pick a profile rather than
 //! hand-building policies.
 
-use crate::{FilesystemPolicy, NetworkPolicy, SandboxPolicy};
+use crate::{NetworkPolicy, SandboxPolicy};
 
 /// A named sandbox profile preset.
 #[derive(Debug, Clone)]

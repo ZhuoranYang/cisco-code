@@ -18,6 +18,7 @@ const VALID_STRUCTURED_TYPES: &[&str] = &[
     "plan_approval_response",
 ];
 
+#[async_trait::async_trait]
 impl Tool for SendMessageTool {
     fn name(&self) -> &str {
         "SendMessage"

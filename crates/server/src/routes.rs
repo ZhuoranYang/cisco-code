@@ -10,8 +10,6 @@
 //! - GET    /api/v1/version           — Server version info
 //! - WS     /api/v1/ws/{session_id}   — WebSocket session
 
-use std::sync::Arc;
-use std::time::Duration;
 
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;

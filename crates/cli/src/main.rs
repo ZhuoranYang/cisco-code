@@ -13,6 +13,7 @@ use cisco_code_api::Provider;
 use cisco_code_protocol::{StopReason, StreamEvent};
 use cisco_code_providers::{ModelClass, ModelConfig, ModelSpec, ProviderRegistry};
 use cisco_code_runtime::{CommandRegistry, CommandResult, ConversationRuntime, RuntimeConfig, discover_skills};
+use cisco_code_server::ProviderFactory;
 use cisco_code_tools::ToolRegistry;
 use clap::{Parser, Subcommand};
 use std::io::{self, Write};
@@ -161,24 +162,24 @@ async fn main() -> Result<()> {
             auth.logout()?;
             println!("OAuth credentials cleared.");
         }
-        Some(Commands::Prompt { text }) => {
+        Some(Commands::Prompt { ref text }) => {
             if cli.print {
-                run_print(&text, &cli).await?;
+                run_print(text, &cli).await?;
             } else {
-                run_prompt(&text, &cli).await?;
+                run_prompt(text, &cli).await?;
             }
         }
-        Some(Commands::Resume { session }) => {
+        Some(Commands::Resume { ref session }) => {
             run_resume(session.as_deref(), &cli).await?;
         }
-        Some(Commands::Server { listen }) => {
-            run_server(&listen, &cli).await?;
+        Some(Commands::Server { ref listen }) => {
+            run_server(listen, &cli).await?;
         }
-        Some(Commands::Attach { url, session }) => {
-            run_attach(&url, session.as_deref()).await?;
+        Some(Commands::Attach { ref url, ref session }) => {
+            run_attach(url, session.as_deref()).await?;
         }
-        Some(Commands::Daemon { slack, webex, cron, listen }) => {
-            run_daemon(slack, webex, cron, listen.as_deref(), &cli).await?;
+        Some(Commands::Daemon { ref slack, ref webex, ref cron, ref listen }) => {
+            run_daemon(*slack, *webex, *cron, listen.as_deref(), &cli).await?;
         }
         None => {
             if cli.resume {
@@ -1073,7 +1074,7 @@ async fn run_server(listen: &str, cli: &Cli) -> Result<()> {
         .join(".cisco-code");
     std::fs::create_dir_all(&db_dir)?;
     let db_path = db_dir.join("cisco-code.db");
-    let store: Arc<dyn Store> = Arc::new(SqliteStore::open(&db_path)?);
+    let store: Arc<dyn Store> = Arc::new(SqliteStore::open(&db_path.to_string_lossy())?);
     eprintln!("[ok] Store: {}", db_path.display());
 
     // 2. Discover providers
@@ -1117,7 +1118,7 @@ async fn run_attach(url: &str, session_override: Option<&str>) -> Result<()> {
     use futures::{SinkExt, StreamExt};
     use tokio_tungstenite::tungstenite::Message as WsMsg;
     use cisco_code_server::websocket::{
-        WsClientMessage, WsServerMessage, parse_client_message, serialize_server_message,
+        WsClientMessage, WsServerMessage,
     };
 
     eprintln!("cisco-code attach v{}", env!("CARGO_PKG_VERSION"));
@@ -1348,7 +1349,7 @@ async fn run_daemon(
         .join(".cisco-code");
     std::fs::create_dir_all(&db_dir)?;
     let db_path = db_dir.join("cisco-code.db");
-    let store: Arc<dyn Store> = Arc::new(SqliteStore::open(&db_path)?);
+    let store: Arc<dyn Store> = Arc::new(SqliteStore::open(&db_path.to_string_lossy())?);
     eprintln!("[ok] Store: {}", db_path.display());
 
     // 2. Discover providers
@@ -1570,7 +1571,7 @@ async fn run_daemon(
             TriggerEvent::CronFired { job } => {
                 tracing::info!(cron_id = %job.id, name = %job.name, "Executing cron job");
 
-                let cwd = job.cwd.clone().unwrap_or_else(|| ".".into());
+                let _cwd = job.cwd.clone().unwrap_or_else(|| ".".into());
                 let model = job.model.clone().unwrap_or_else(|| config.model.clone());
 
                 let provider = match provider_factory.create(&model).await {

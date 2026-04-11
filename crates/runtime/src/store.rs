@@ -13,8 +13,8 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::cron::{CronJob, CronSchedule};
-use crate::memory::{MemoryEntry, MemoryType};
+use crate::cron::CronJob;
+use crate::memory::MemoryEntry;
 use crate::session::SessionMetadata;
 use cisco_code_protocol::Message;
 

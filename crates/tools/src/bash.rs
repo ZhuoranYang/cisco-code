@@ -14,6 +14,7 @@ use crate::{Tool, ToolContext};
 
 pub struct BashTool;
 
+#[async_trait::async_trait]
 impl Tool for BashTool {
     fn name(&self) -> &str {
         "Bash"

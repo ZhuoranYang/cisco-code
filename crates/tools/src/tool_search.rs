@@ -11,6 +11,7 @@ use crate::{Tool, ToolContext};
 
 pub struct ToolSearchTool;
 
+#[async_trait::async_trait]
 impl Tool for ToolSearchTool {
     fn name(&self) -> &str {
         "ToolSearch"

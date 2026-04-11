@@ -144,6 +144,7 @@ mod tests {
         }
     }
 
+    #[async_trait::async_trait]
     impl Channel for StubChannel {
         fn name(&self) -> &str {
             &self.name

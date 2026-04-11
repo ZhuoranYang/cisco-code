@@ -26,6 +26,7 @@ const KNOWN_SETTINGS: &[&str] = &[
     "memory.enabled",
 ];
 
+#[async_trait::async_trait]
 impl Tool for ConfigTool {
     fn name(&self) -> &str {
         "Config"

@@ -127,6 +127,10 @@ pub enum HookResult {
     /// Hook explicitly approved tool execution, bypassing the permission engine.
     /// This enables enterprise policy hooks that programmatically control tool access.
     Approve,
+    /// Hook approved AND provided modified input (pre_tool_use only).
+    /// This happens when a hook outputs JSON with both `"decision": "approve"`
+    /// and additional fields that modify the tool input.
+    ApproveWithModifiedInput(serde_json::Value),
     /// Hook explicitly denied tool execution, bypassing the permission engine.
     Deny {
         /// Reason for denial.
@@ -202,6 +206,7 @@ impl HookRunner {
                     HookResult::ModifiedInput(_)
                     | HookResult::Suppress { .. }
                     | HookResult::Approve
+                    | HookResult::ApproveWithModifiedInput(_)
                     | HookResult::Deny { .. } => {
                         return result;
                     }
@@ -284,7 +289,20 @@ impl HookRunner {
                             ) {
                                 // Check for explicit permission decisions
                                 match json.get("decision").and_then(|d| d.as_str()) {
-                                    Some("approve") => return Ok(HookResult::Approve),
+                                    Some("approve") => {
+                                        // If this is a pre_tool_use hook and the JSON has
+                                        // fields beyond "decision" (and optional "reason"),
+                                        // treat it as approve + modified input.
+                                        if input.event == HookEvent::PreToolUse {
+                                            let has_extra_fields = json.as_object()
+                                                .map(|obj| obj.keys().any(|k| k != "decision" && k != "reason"))
+                                                .unwrap_or(false);
+                                            if has_extra_fields {
+                                                return Ok(HookResult::ApproveWithModifiedInput(json));
+                                            }
+                                        }
+                                        return Ok(HookResult::Approve);
+                                    }
                                     Some("deny") => {
                                         let reason = json["reason"]
                                             .as_str()

@@ -281,7 +281,7 @@ impl Provider for OpenAIClient {
         &self,
         request: CompletionRequest,
     ) -> Pin<Box<dyn std::future::Future<Output = Result<Vec<AssistantEvent>>> + Send + '_>> {
-        Box::pin(self.stream_with_retry(&request))
+        Box::pin(async move { self.stream_with_retry(&request).await })
     }
 }
 

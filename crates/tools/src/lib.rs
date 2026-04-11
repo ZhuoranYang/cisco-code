@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::Result;
-use cisco_code_protocol::{PermissionLevel, ToolDefinition, ToolMetadata, ToolResult, ToolSource};
+use cisco_code_protocol::{PermissionLevel, ToolDefinition, ToolResult};
 
 pub mod agent;
 pub mod apply_patch;
@@ -56,7 +56,7 @@ impl ToolContext {
 }
 
 /// The core tool trait.
-#[allow(async_fn_in_trait)]
+#[async_trait::async_trait]
 pub trait Tool: Send + Sync {
     fn name(&self) -> &str;
     fn description(&self) -> &str;

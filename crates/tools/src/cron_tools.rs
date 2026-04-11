@@ -10,6 +10,7 @@ use crate::{Tool, ToolContext};
 
 pub struct CronCreateTool;
 
+#[async_trait::async_trait]
 impl Tool for CronCreateTool {
     fn name(&self) -> &str {
         "CronCreate"
@@ -68,6 +69,7 @@ impl Tool for CronCreateTool {
 
 pub struct CronListTool;
 
+#[async_trait::async_trait]
 impl Tool for CronListTool {
     fn name(&self) -> &str {
         "CronList"
@@ -101,6 +103,7 @@ impl Tool for CronListTool {
 
 pub struct CronDeleteTool;
 
+#[async_trait::async_trait]
 impl Tool for CronDeleteTool {
     fn name(&self) -> &str {
         "CronDelete"

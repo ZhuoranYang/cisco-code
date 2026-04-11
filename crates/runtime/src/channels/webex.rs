@@ -125,6 +125,7 @@ impl WebexChannel {
     }
 }
 
+#[async_trait::async_trait]
 impl Channel for WebexChannel {
     fn name(&self) -> &str {
         "webex"
