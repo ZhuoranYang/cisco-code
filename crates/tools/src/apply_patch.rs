@@ -108,6 +108,7 @@ struct FilePatch {
 
 /// A single hunk from a unified diff.
 #[derive(Debug)]
+#[allow(dead_code)] // fields parsed for correctness validation; used in tests
 struct Hunk {
     old_start: usize,
     old_count: usize,

@@ -61,6 +61,7 @@ impl WebexChannel {
 
     /// Fetch the full message content from Webex API.
     /// (Webhooks only send the message ID, not the content.)
+    #[allow(dead_code)] // will be used when webhook message polling is wired up
     async fn fetch_message(&self, message_id: &str) -> anyhow::Result<serde_json::Value> {
         let resp = self
             .http
