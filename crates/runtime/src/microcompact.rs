@@ -164,6 +164,7 @@ pub fn compaction_level(estimated_tokens: u64, threshold: u64) -> CompactionLeve
 mod tests {
     use super::*;
     use cisco_code_protocol::{ContentBlock, ToolResultMessage, UserMessage};
+    use uuid::Uuid;
 
     fn make_user_msg(text: &str) -> Message {
         Message::User(UserMessage {

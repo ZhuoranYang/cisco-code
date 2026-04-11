@@ -244,7 +244,7 @@ mod tests {
         let spec = ModelSpec::new("bedrock", "some-model");
         let result = registry.provider_for_spec(&spec);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Bedrock not available"));
+        assert!(result.err().unwrap().to_string().contains("Bedrock not available"));
     }
 
     #[test]
@@ -259,6 +259,6 @@ mod tests {
         let spec = ModelSpec::new("google", "gemini-pro");
         let result = registry.provider_for_spec(&spec);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Unknown provider"));
+        assert!(result.err().unwrap().to_string().contains("Unknown provider"));
     }
 }

@@ -96,7 +96,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_resolve_or_create_new() {
-        let store = Arc::new(SqliteStore::open_in_memory().unwrap());
+        let store = Arc::new(SqliteStore::in_memory().unwrap());
         let router = SessionRouter::new(store.clone());
 
         let sid = router
@@ -115,7 +115,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_different_threads_different_sessions() {
-        let store = Arc::new(SqliteStore::open_in_memory().unwrap());
+        let store = Arc::new(SqliteStore::in_memory().unwrap());
         let router = SessionRouter::new(store);
 
         let sid1 = router
@@ -131,7 +131,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_resolve_returns_none() {
-        let store = Arc::new(SqliteStore::open_in_memory().unwrap());
+        let store = Arc::new(SqliteStore::in_memory().unwrap());
         let router = SessionRouter::new(store);
 
         let result = router.resolve("user1", "slack", None).await.unwrap();
@@ -140,7 +140,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_explicit_bind() {
-        let store = Arc::new(SqliteStore::open_in_memory().unwrap());
+        let store: Arc<dyn Store> = Arc::new(SqliteStore::in_memory().unwrap());
         let router = SessionRouter::new(store.clone());
 
         // Create a session first

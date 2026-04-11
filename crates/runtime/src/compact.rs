@@ -576,7 +576,7 @@ fn content_blocks_chars(blocks: &[ContentBlock]) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cisco_code_protocol::UserMessage;
+    use cisco_code_protocol::{TokenUsage, UserMessage};
 
     fn make_user_msg(text: &str) -> Message {
         Message::User(UserMessage {
