@@ -1,0 +1,14 @@
+[package]
+name = "cisco-code-e2e"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+cisco-code-api = { path = "../../crates/api" }
+cisco-code-protocol = { path = "../../crates/protocol" }
+cisco-code-runtime = { path = "../../crates/runtime" }
+cisco-code-tools = { path = "../../crates/tools" }
+tokio = { version = "1", features = ["full"] }
+serde_json = "1"
+tempfile = "3"

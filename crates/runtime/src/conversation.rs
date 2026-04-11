@@ -83,6 +83,8 @@ pub struct ConversationRuntime<P: Provider> {
     /// Optional interactive permission resolver. When `None`, permission
     /// requests that require user approval are auto-denied (safe default).
     permission_resolver: Option<Arc<dyn PermissionResolver>>,
+    /// Working directory for tool execution. Defaults to ".".
+    working_dir: String,
 }
 
 impl<P: Provider> ConversationRuntime<P> {
@@ -106,6 +108,7 @@ impl<P: Provider> ConversationRuntime<P> {
             store: None,
             pending_reminders: Vec::new(),
             permission_resolver: None,
+            working_dir: ".".to_string(),
         }
     }
 
@@ -129,6 +132,7 @@ impl<P: Provider> ConversationRuntime<P> {
             store: None,
             pending_reminders: Vec::new(),
             permission_resolver: None,
+            working_dir: ".".to_string(),
         }
     }
 
@@ -192,6 +196,7 @@ impl<P: Provider> ConversationRuntime<P> {
             store: Some(store),
             pending_reminders: Vec::new(),
             permission_resolver: None,
+            working_dir: ".".to_string(),
         })
     }
 
@@ -246,8 +251,12 @@ impl<P: Provider> ConversationRuntime<P> {
 
     /// Get the current working directory for tool execution.
     fn cwd(&self) -> &str {
-        // TODO: Track cwd changes from Bash cd commands
-        "."
+        &self.working_dir
+    }
+
+    /// Set the working directory for tool execution.
+    pub fn set_cwd(&mut self, cwd: impl Into<String>) {
+        self.working_dir = cwd.into();
     }
 
     /// Build a PromptBuilder configured for this turn.

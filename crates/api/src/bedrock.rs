@@ -128,8 +128,12 @@ impl BedrockClient {
         let body = self.build_body(req);
         let payload = serde_json::to_vec(&body)?;
 
-        let model_path = Self::encode_model_id(&req.model);
-        let uri = format!("/model/{model_path}/invoke");
+        // Use raw model ID in the HTTP URL (reqwest sends it as-is).
+        // For SigV4 signing, URI-encode the path (colon → %3A) per AWS spec.
+        // Using the same encoded path for both causes double-encoding: reqwest
+        // sends `%3A`, and AWS re-encodes `%` → `%25`, producing `%253A`.
+        let raw_uri = format!("/model/{}/invoke", req.model);
+        let canonical_uri = format!("/model/{}/invoke", Self::encode_model_id(&req.model));
 
         let now = Utc::now();
         let host = self.host();
@@ -161,9 +165,9 @@ impl BedrockClient {
 
         let payload_hash = sha256_hex(&payload);
 
-        // Canonical request
+        // Canonical request (use encoded URI for signing)
         let canonical_request = format!(
-            "POST\n{uri}\n\n{canonical_headers}\n{signed_headers}\n{payload_hash}"
+            "POST\n{canonical_uri}\n\n{canonical_headers}\n{signed_headers}\n{payload_hash}"
         );
 
         // String to sign
@@ -187,10 +191,10 @@ impl BedrockClient {
             self.access_key_id
         );
 
-        // Send request
+        // Send request (use raw URI to avoid double-encoding)
         let mut request_builder = self
             .http
-            .post(format!("{}{uri}", self.endpoint()))
+            .post(format!("{}{raw_uri}", self.endpoint()))
             .header("content-type", "application/json")
             .header("x-amz-date", &amz_date)
             .header("authorization", &authorization);
