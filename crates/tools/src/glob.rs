@@ -101,6 +101,10 @@ impl Tool for GlobTool {
     fn permission_level(&self) -> PermissionLevel {
         PermissionLevel::ReadOnly
     }
+
+    fn is_concurrency_safe(&self) -> bool {
+        true
+    }
 }
 
 #[cfg(test)]
@@ -112,6 +116,7 @@ mod tests {
         ToolContext {
             cwd: dir.to_string_lossy().to_string(),
             interactive: false,
+            progress_tx: None,
         }
     }
 

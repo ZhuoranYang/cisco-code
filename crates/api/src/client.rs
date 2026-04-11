@@ -36,6 +36,47 @@ pub struct CompletionRequest {
     pub max_tokens: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub temperature: Option<f64>,
+    /// Extended thinking configuration (Anthropic-specific).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking: Option<ThinkingConfig>,
+    /// Optional structured system blocks with cache control metadata.
+    /// When present, these are used instead of `system_prompt` to enable
+    /// Anthropic's prompt caching — static content gets `cache_control`
+    /// so it isn't re-tokenized on every turn.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub system_blocks: Option<Vec<SystemBlock>>,
+}
+
+/// A system prompt block with optional cache control metadata.
+///
+/// Anthropic's prompt caching allows marking system prompt sections as
+/// cacheable. Static content (agent identity, tool guidelines, etc.) can
+/// be cached to save tokenization cost; dynamic content (git status, todos,
+/// date) changes per turn and should not be cached.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SystemBlock {
+    pub text: String,
+    /// Cache control type. `Some("ephemeral")` marks the block as cacheable
+    /// for the duration of the conversation. `None` = no caching.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_control: Option<CacheControl>,
+}
+
+/// Cache control metadata for prompt caching.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheControl {
+    #[serde(rename = "type")]
+    pub cache_type: String,
+}
+
+/// Extended thinking configuration for Anthropic models.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ThinkingConfig {
+    /// The type of thinking — always "enabled" when present.
+    #[serde(rename = "type")]
+    pub thinking_type: String,
+    /// Maximum tokens the model can use for internal reasoning.
+    pub budget_tokens: u32,
 }
 
 /// Message format sent to the API.
@@ -49,6 +90,8 @@ pub struct ApiMessage {
 #[derive(Debug, Clone)]
 pub enum AssistantEvent {
     TextDelta(String),
+    /// Extended thinking content from the model's internal reasoning.
+    ThinkingDelta(String),
     ToolUse {
         id: String,
         name: String,
@@ -93,10 +136,32 @@ impl AnthropicClient {
         let mut body = serde_json::json!({
             "model": req.model,
             "max_tokens": req.max_tokens,
-            "system": req.system_prompt,
             "messages": req.messages,
             "stream": true,
         });
+
+        // Use structured system blocks with cache control when available,
+        // falling back to plain string system prompt.
+        if let Some(ref blocks) = req.system_blocks {
+            let system_blocks: Vec<serde_json::Value> = blocks
+                .iter()
+                .map(|b| {
+                    let mut block = serde_json::json!({
+                        "type": "text",
+                        "text": b.text,
+                    });
+                    if let Some(ref cc) = b.cache_control {
+                        block["cache_control"] = serde_json::json!({
+                            "type": cc.cache_type,
+                        });
+                    }
+                    block
+                })
+                .collect();
+            body["system"] = serde_json::json!(system_blocks);
+        } else {
+            body["system"] = serde_json::json!(req.system_prompt);
+        }
         if !req.tools.is_empty() {
             body["tools"] = serde_json::json!(
                 req.tools.iter().map(|t| serde_json::json!({
@@ -108,6 +173,17 @@ impl AnthropicClient {
         }
         if let Some(temp) = req.temperature {
             body["temperature"] = serde_json::json!(temp);
+        }
+        // Extended thinking — requires temperature to be unset (Anthropic constraint)
+        if let Some(ref thinking) = req.thinking {
+            body["thinking"] = serde_json::json!({
+                "type": thinking.thinking_type,
+                "budget_tokens": thinking.budget_tokens,
+            });
+            // Anthropic requires temperature to be absent when thinking is enabled
+            if body.get("temperature").is_some() {
+                body.as_object_mut().unwrap().remove("temperature");
+            }
         }
         body
     }
@@ -173,6 +249,11 @@ impl AnthropicClient {
                         "text_delta" => {
                             if let Some(t) = delta["text"].as_str() {
                                 events.push(AssistantEvent::TextDelta(t.to_string()));
+                            }
+                        }
+                        "thinking_delta" => {
+                            if let Some(t) = delta["thinking"].as_str() {
+                                events.push(AssistantEvent::ThinkingDelta(t.to_string()));
                             }
                         }
                         "input_json_delta" => {
@@ -253,6 +334,26 @@ impl Provider for AnthropicClient {
     }
 }
 
+/// Allow using `Box<dyn Provider>` as a Provider (dynamic dispatch).
+impl Provider for Box<dyn Provider> {
+    fn stream(
+        &self,
+        request: CompletionRequest,
+    ) -> Pin<Box<dyn std::future::Future<Output = Result<Vec<AssistantEvent>>> + Send + '_>> {
+        (**self).stream(request)
+    }
+}
+
+/// Allow using `Arc<T>` as a Provider (for shared ownership in registries).
+impl<T: Provider> Provider for std::sync::Arc<T> {
+    fn stream(
+        &self,
+        request: CompletionRequest,
+    ) -> Pin<Box<dyn std::future::Future<Output = Result<Vec<AssistantEvent>>> + Send + '_>> {
+        (**self).stream(request)
+    }
+}
+
 #[derive(Default)]
 struct BlockAcc {
     block_type: String,
@@ -292,6 +393,8 @@ mod tests {
             tools: vec![],
             max_tokens: 1024,
             temperature: None,
+            thinking: None,
+            system_blocks: None,
         };
         let body = client.build_body(&req);
 
@@ -301,6 +404,7 @@ mod tests {
         assert_eq!(body["stream"], true);
         assert!(body.get("tools").is_none());
         assert!(body.get("temperature").is_none());
+        assert!(body.get("thinking").is_none());
     }
 
     #[test]
@@ -317,6 +421,8 @@ mod tests {
             }],
             max_tokens: 4096,
             temperature: Some(0.7),
+            thinking: None,
+            system_blocks: None,
         };
         let body = client.build_body(&req);
 
@@ -324,6 +430,31 @@ mod tests {
         assert_eq!(body["tools"].as_array().unwrap().len(), 1);
         assert_eq!(body["tools"][0]["name"], "Read");
         assert_eq!(body["temperature"], 0.7);
+    }
+
+    #[test]
+    fn test_build_body_with_thinking() {
+        let client = AnthropicClient::new("key");
+        let req = CompletionRequest {
+            model: "claude-opus-4-6".into(),
+            system_prompt: "Agent".into(),
+            messages: vec![],
+            tools: vec![],
+            max_tokens: 16000,
+            temperature: Some(0.5), // should be removed when thinking is enabled
+            thinking: Some(ThinkingConfig {
+                thinking_type: "enabled".into(),
+                budget_tokens: 10000,
+            }),
+            system_blocks: None,
+        };
+        let body = client.build_body(&req);
+
+        assert!(body.get("thinking").is_some());
+        assert_eq!(body["thinking"]["type"], "enabled");
+        assert_eq!(body["thinking"]["budget_tokens"], 10000);
+        // Temperature must be removed when thinking is enabled
+        assert!(body.get("temperature").is_none());
     }
 
     #[test]
@@ -338,16 +469,22 @@ mod tests {
             tools: vec![],
             max_tokens: 100,
             temperature: None,
+            thinking: None,
+            system_blocks: None,
         };
         let json = serde_json::to_value(&req).unwrap();
         assert_eq!(json["model"], "test");
         assert!(json.get("temperature").is_none()); // skip_serializing_if
+        assert!(json.get("thinking").is_none()); // skip_serializing_if
     }
 
     #[test]
     fn test_assistant_event_variants() {
         let text = AssistantEvent::TextDelta("hello".into());
         assert!(matches!(text, AssistantEvent::TextDelta(ref t) if t == "hello"));
+
+        let thinking = AssistantEvent::ThinkingDelta("Let me reason...".into());
+        assert!(matches!(thinking, AssistantEvent::ThinkingDelta(ref t) if t.contains("reason")));
 
         let tool = AssistantEvent::ToolUse {
             id: "tu_1".into(),
@@ -360,5 +497,94 @@ mod tests {
             stop_reason: "end_turn".into(),
         };
         assert!(matches!(stop, AssistantEvent::MessageStop { ref stop_reason } if stop_reason == "end_turn"));
+    }
+
+    #[test]
+    fn test_build_body_with_system_blocks() {
+        let client = AnthropicClient::new("key");
+        let req = CompletionRequest {
+            model: "claude-sonnet-4-6".into(),
+            system_prompt: "fallback".into(),
+            messages: vec![],
+            tools: vec![],
+            max_tokens: 4096,
+            temperature: None,
+            thinking: None,
+            system_blocks: Some(vec![
+                SystemBlock {
+                    text: "You are a helpful assistant.".into(),
+                    cache_control: Some(CacheControl {
+                        cache_type: "ephemeral".into(),
+                    }),
+                },
+                SystemBlock {
+                    text: "Current date: 2026-04-10".into(),
+                    cache_control: None,
+                },
+            ]),
+        };
+        let body = client.build_body(&req);
+
+        // System should be an array of blocks, not a plain string
+        let system = body["system"].as_array().expect("system should be array");
+        assert_eq!(system.len(), 2);
+        assert_eq!(system[0]["type"], "text");
+        assert_eq!(system[0]["text"], "You are a helpful assistant.");
+        assert_eq!(system[0]["cache_control"]["type"], "ephemeral");
+        assert_eq!(system[1]["type"], "text");
+        assert_eq!(system[1]["text"], "Current date: 2026-04-10");
+        assert!(system[1].get("cache_control").is_none());
+    }
+
+    #[test]
+    fn test_build_body_without_system_blocks_uses_string() {
+        let client = AnthropicClient::new("key");
+        let req = CompletionRequest {
+            model: "claude-sonnet-4-6".into(),
+            system_prompt: "You are helpful.".into(),
+            messages: vec![],
+            tools: vec![],
+            max_tokens: 1024,
+            temperature: None,
+            thinking: None,
+            system_blocks: None,
+        };
+        let body = client.build_body(&req);
+
+        // System should be a plain string
+        assert_eq!(body["system"], "You are helpful.");
+    }
+
+    #[test]
+    fn test_system_block_serialization() {
+        let block = SystemBlock {
+            text: "Hello".into(),
+            cache_control: Some(CacheControl {
+                cache_type: "ephemeral".into(),
+            }),
+        };
+        let json = serde_json::to_value(&block).unwrap();
+        assert_eq!(json["text"], "Hello");
+        assert_eq!(json["cache_control"]["type"], "ephemeral");
+
+        // Without cache control
+        let block_no_cache = SystemBlock {
+            text: "World".into(),
+            cache_control: None,
+        };
+        let json2 = serde_json::to_value(&block_no_cache).unwrap();
+        assert_eq!(json2["text"], "World");
+        assert!(json2.get("cache_control").is_none());
+    }
+
+    #[test]
+    fn test_thinking_config_serialization() {
+        let config = ThinkingConfig {
+            thinking_type: "enabled".into(),
+            budget_tokens: 8000,
+        };
+        let json = serde_json::to_value(&config).unwrap();
+        assert_eq!(json["type"], "enabled");
+        assert_eq!(json["budget_tokens"], 8000);
     }
 }

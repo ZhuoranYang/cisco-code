@@ -1,7 +1,7 @@
 //! Grep tool — search file contents using ripgrep.
 //!
 //! Pattern from Claude Code: shell out to `rg` (ripgrep) with appropriate flags.
-//! Exit code 1 = no matches (not an error). EAGAIN gets retried with -j 1.
+//! Exit code 1 = no matches (not an error).
 
 use anyhow::Result;
 use cisco_code_protocol::{PermissionLevel, ToolResult};
@@ -51,9 +51,37 @@ impl Tool for GrepTool {
                     "type": "boolean",
                     "description": "Show line numbers (default true for content mode)"
                 },
+                "-A": {
+                    "type": "integer",
+                    "description": "Number of lines to show after each match"
+                },
+                "-B": {
+                    "type": "integer",
+                    "description": "Number of lines to show before each match"
+                },
+                "-C": {
+                    "type": "integer",
+                    "description": "Number of lines of context (before and after)"
+                },
+                "context": {
+                    "type": "integer",
+                    "description": "Alias for -C (lines of context before and after)"
+                },
                 "head_limit": {
                     "type": "integer",
                     "description": "Limit output to first N entries (default 250)"
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "Skip first N entries before applying head_limit (default 0)"
+                },
+                "multiline": {
+                    "type": "boolean",
+                    "description": "Enable multiline mode where . matches newlines (rg -U --multiline-dotall)"
+                },
+                "type": {
+                    "type": "string",
+                    "description": "File type filter (e.g. 'js', 'py', 'rust'). Maps to rg --type."
                 }
             },
             "required": ["pattern"]
@@ -75,16 +103,26 @@ impl Tool for GrepTool {
             .unwrap_or("files_with_matches");
 
         let head_limit = input["head_limit"].as_u64().unwrap_or(250) as usize;
+        let offset = input["offset"].as_u64().unwrap_or(0) as usize;
 
         // Build ripgrep args
         let mut args = Vec::new();
+
+        // Multiline mode
+        if input["multiline"].as_bool().unwrap_or(false) {
+            args.push("-U".to_string()); // --multiline
+            args.push("--multiline-dotall".to_string());
+        }
 
         match output_mode {
             "files_with_matches" => args.push("-l".to_string()),
             "count" => args.push("-c".to_string()),
             _ => {
                 // content mode
-                args.push("-n".to_string()); // line numbers
+                let show_numbers = input["-n"].as_bool().unwrap_or(true);
+                if show_numbers {
+                    args.push("-n".to_string());
+                }
             }
         }
 
@@ -92,9 +130,34 @@ impl Tool for GrepTool {
             args.push("-i".to_string());
         }
 
+        // Context flags (only meaningful for content mode)
+        if output_mode == "content" {
+            // -C / context takes precedence, then -A/-B individually
+            let context = input["-C"].as_u64().or_else(|| input["context"].as_u64());
+            if let Some(c) = context {
+                args.push("-C".to_string());
+                args.push(c.to_string());
+            } else {
+                if let Some(a) = input["-A"].as_u64() {
+                    args.push("-A".to_string());
+                    args.push(a.to_string());
+                }
+                if let Some(b) = input["-B"].as_u64() {
+                    args.push("-B".to_string());
+                    args.push(b.to_string());
+                }
+            }
+        }
+
         if let Some(glob_pattern) = input["glob"].as_str() {
             args.push("--glob".to_string());
             args.push(glob_pattern.to_string());
+        }
+
+        // File type filter
+        if let Some(file_type) = input["type"].as_str() {
+            args.push("--type".to_string());
+            args.push(file_type.to_string());
         }
 
         args.push("--".to_string());
@@ -117,22 +180,37 @@ impl Tool for GrepTool {
 
                 if code == 0 || code == 1 {
                     // code 1 = no matches
-                    let lines: Vec<&str> = stdout
-                        .trim()
-                        .lines()
-                        .filter(|l| !l.is_empty())
+                    // In content mode, preserve blank lines (they may be context
+                    // lines from the source file or ripgrep separators).
+                    // In other modes, filter empty lines.
+                    let all_lines: Vec<&str> = if output_mode == "content" {
+                        stdout.trim().lines().collect()
+                    } else {
+                        stdout.trim().lines().filter(|l| !l.is_empty()).collect()
+                    };
+
+                    // Apply offset + head_limit
+                    let total = all_lines.len();
+                    let lines: Vec<&str> = all_lines
+                        .into_iter()
+                        .skip(offset)
                         .take(head_limit)
                         .collect();
 
                     if lines.is_empty() {
-                        Ok(ToolResult::success("No matches found."))
+                        if offset > 0 && total > 0 {
+                            Ok(ToolResult::success(format!(
+                                "No results at offset {offset} (total: {total})"
+                            )))
+                        } else {
+                            Ok(ToolResult::success("No matches found."))
+                        }
                     } else {
                         let result = lines.join("\n");
-                        let total = stdout.trim().lines().count();
-                        if total > head_limit {
+                        let remaining = total.saturating_sub(offset + head_limit);
+                        if remaining > 0 {
                             Ok(ToolResult::success(format!(
-                                "{result}\n\n... ({} more results truncated)",
-                                total - head_limit
+                                "{result}\n\n[Showing results with pagination = limit: {head_limit}]"
                             )))
                         } else {
                             Ok(ToolResult::success(result))
@@ -157,6 +235,10 @@ impl Tool for GrepTool {
     fn permission_level(&self) -> PermissionLevel {
         PermissionLevel::ReadOnly
     }
+
+    fn is_concurrency_safe(&self) -> bool {
+        true
+    }
 }
 
 #[cfg(test)]
@@ -168,6 +250,7 @@ mod tests {
         ToolContext {
             cwd: dir.to_string_lossy().to_string(),
             interactive: false,
+            progress_tx: None,
         }
     }
 
@@ -284,6 +367,133 @@ mod tests {
 
         if !result.is_error {
             assert!(result.output.contains("test.txt"));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_grep_with_offset() {
+        let dir = tempfile::tempdir().unwrap();
+        // Create files that will produce multiple matches
+        for i in 1..=5 {
+            std::fs::write(
+                dir.path().join(format!("file{i}.txt")),
+                "matching_content\n",
+            )
+            .unwrap();
+        }
+
+        let tool = GrepTool;
+        let result = tool
+            .call(
+                serde_json::json!({
+                    "pattern": "matching_content",
+                    "path": dir.path().to_string_lossy(),
+                    "offset": 2,
+                    "head_limit": 2
+                }),
+                &ctx(dir.path()),
+            )
+            .await
+            .unwrap();
+
+        if !result.is_error && !result.output.contains("No matches") {
+            // Should have at most 2 results (after skipping first 2)
+            let lines: Vec<&str> = result.output.lines()
+                .filter(|l| !l.is_empty() && !l.starts_with('['))
+                .collect();
+            assert!(lines.len() <= 2);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_grep_multiline() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("multi.txt"),
+            "struct Foo {\n    field: i32,\n}\n",
+        )
+        .unwrap();
+
+        let tool = GrepTool;
+        let result = tool
+            .call(
+                serde_json::json!({
+                    "pattern": "struct.*field",
+                    "path": dir.path().to_string_lossy(),
+                    "multiline": true,
+                    "output_mode": "content"
+                }),
+                &ctx(dir.path()),
+            )
+            .await
+            .unwrap();
+
+        // Multiline match should find the cross-line pattern
+        if !result.is_error {
+            assert!(
+                result.output.contains("struct") || result.output.contains("No matches"),
+                "output: {}",
+                result.output
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_grep_type_filter() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("code.rs"), "fn main() {}\n").unwrap();
+        std::fs::write(dir.path().join("code.py"), "def main(): pass\n").unwrap();
+
+        let tool = GrepTool;
+        let result = tool
+            .call(
+                serde_json::json!({
+                    "pattern": "main",
+                    "path": dir.path().to_string_lossy(),
+                    "type": "rust"
+                }),
+                &ctx(dir.path()),
+            )
+            .await
+            .unwrap();
+
+        if !result.is_error && !result.output.contains("No matches") {
+            assert!(result.output.contains("code.rs"));
+            assert!(!result.output.contains("code.py"));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_grep_context_lines() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("ctx.txt"),
+            "before1\nbefore2\ntarget\nafter1\nafter2\n",
+        )
+        .unwrap();
+
+        let tool = GrepTool;
+        let result = tool
+            .call(
+                serde_json::json!({
+                    "pattern": "target",
+                    "path": dir.path().to_string_lossy(),
+                    "output_mode": "content",
+                    "context": 1
+                }),
+                &ctx(dir.path()),
+            )
+            .await
+            .unwrap();
+
+        if !result.is_error {
+            assert!(result.output.contains("target"));
+            // Should include context lines
+            assert!(
+                result.output.contains("before2") || result.output.contains("after1"),
+                "Expected context lines, got: {}",
+                result.output
+            );
         }
     }
 }

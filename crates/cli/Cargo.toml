@@ -12,7 +12,9 @@ cisco-code-runtime = { path = "../runtime" }
 cisco-code-protocol = { path = "../protocol" }
 cisco-code-tools = { path = "../tools" }
 cisco-code-api = { path = "../api" }
+cisco-code-providers = { path = "../providers" }
 cisco-code-telemetry = { path = "../telemetry" }
+cisco-code-server = { path = "../server" }
 tokio.workspace = true
 clap.workspace = true
 ratatui.workspace = true
@@ -22,6 +24,8 @@ serde_json.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 anyhow.workspace = true
+futures.workspace = true
+tokio-tungstenite.workspace = true
 dirs-next = "2"
 
 [lints]

@@ -6,14 +6,10 @@ edition.workspace = true
 [dependencies]
 cisco-code-protocol = { path = "../protocol" }
 cisco-code-api = { path = "../api" }
-tokio.workspace = true
-futures.workspace = true
-reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
 anyhow.workspace = true
-thiserror.workspace = true
 
 [lints]
 workspace = true

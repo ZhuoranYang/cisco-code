@@ -13,6 +13,7 @@ tracing-subscriber.workspace = true
 anyhow.workspace = true
 chrono.workspace = true
 rusqlite.workspace = true
+uuid.workspace = true
 
 [lints]
 workspace = true

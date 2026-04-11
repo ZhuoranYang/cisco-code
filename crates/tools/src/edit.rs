@@ -193,6 +193,7 @@ mod tests {
         let ctx = crate::ToolContext {
             cwd: "/tmp".into(),
             interactive: false,
+            progress_tx: None,
         };
         let input = serde_json::json!({
             "file_path": "/tmp/test.txt",
@@ -210,6 +211,7 @@ mod tests {
         let ctx = crate::ToolContext {
             cwd: "/tmp".into(),
             interactive: false,
+            progress_tx: None,
         };
         let input = serde_json::json!({
             "file_path": "/tmp/cisco_code_nonexistent_file_12345.txt",
@@ -231,6 +233,7 @@ mod tests {
         let ctx = crate::ToolContext {
             cwd: dir.path().to_string_lossy().to_string(),
             interactive: false,
+            progress_tx: None,
         };
         let input = serde_json::json!({
             "file_path": path.to_string_lossy(),
@@ -254,6 +257,7 @@ mod tests {
         let ctx = crate::ToolContext {
             cwd: dir.path().to_string_lossy().to_string(),
             interactive: false,
+            progress_tx: None,
         };
         let input = serde_json::json!({
             "file_path": path.to_string_lossy(),
@@ -279,6 +283,7 @@ mod tests {
         let ctx = crate::ToolContext {
             cwd: dir.path().to_string_lossy().to_string(),
             interactive: false,
+            progress_tx: None,
         };
         let input = serde_json::json!({
             "file_path": path.to_string_lossy(),

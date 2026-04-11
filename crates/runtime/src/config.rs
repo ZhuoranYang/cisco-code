@@ -11,18 +11,24 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
+use cisco_code_api::ThinkingConfig;
 use serde::{Deserialize, Serialize};
 
 /// Runtime configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RuntimeConfig {
     pub model: String,
+    /// Model class: "small", "medium", "large" — resolved by CLI to a specific model.
+    pub model_class: Option<String>,
     pub max_tokens: u32,
     pub max_turns: u32,
     pub max_budget_usd: Option<f64>,
     pub temperature: Option<f64>,
     pub permission_mode: PermissionMode,
     pub sandbox_mode: SandboxMode,
+    /// Extended thinking config (Anthropic models only).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking: Option<ThinkingConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -48,12 +54,14 @@ impl Default for RuntimeConfig {
     fn default() -> Self {
         Self {
             model: "claude-sonnet-4-6".to_string(),
+            model_class: None,
             max_tokens: 16384,
             max_turns: 50,
             max_budget_usd: None,
             temperature: None,
             permission_mode: PermissionMode::Default,
             sandbox_mode: SandboxMode::None,
+            thinking: None,
         }
     }
 }
@@ -70,6 +78,7 @@ pub struct PartialConfig {
 #[derive(Debug, Clone, Deserialize)]
 pub struct GeneralSection {
     pub default_model: Option<String>,
+    pub model_class: Option<String>,
     pub max_tokens: Option<u32>,
     pub max_turns: Option<u32>,
     pub max_budget_usd: Option<f64>,
@@ -127,6 +136,9 @@ impl RuntimeConfig {
             if let Some(ref model) = general.default_model {
                 self.model = model.clone();
             }
+            if let Some(ref class) = general.model_class {
+                self.model_class = Some(class.clone());
+            }
             if let Some(max_tokens) = general.max_tokens {
                 self.max_tokens = max_tokens;
             }
@@ -168,6 +180,9 @@ impl RuntimeConfig {
         if let Ok(model) = std::env::var("CISCO_CODE_MODEL") {
             self.model = model;
         }
+        if let Ok(class) = std::env::var("CISCO_CODE_MODEL_CLASS") {
+            self.model_class = Some(class);
+        }
         if let Ok(tokens) = std::env::var("CISCO_CODE_MAX_TOKENS") {
             if let Ok(n) = tokens.parse() {
                 self.max_tokens = n;
@@ -201,6 +216,7 @@ mod tests {
     fn test_default_config() {
         let config = RuntimeConfig::default();
         assert_eq!(config.model, "claude-sonnet-4-6");
+        assert!(config.model_class.is_none());
         assert_eq!(config.max_tokens, 16384);
         assert_eq!(config.max_turns, 50);
         assert!(config.max_budget_usd.is_none());
@@ -245,6 +261,7 @@ mode = "os-native"
         let partial = PartialConfig {
             general: Some(GeneralSection {
                 default_model: Some("gpt-5".into()),
+                model_class: Some("large".into()),
                 max_tokens: Some(2048),
                 max_turns: None,
                 max_budget_usd: Some(5.0),
@@ -258,6 +275,7 @@ mode = "os-native"
 
         config.apply_partial(&partial);
         assert_eq!(config.model, "gpt-5");
+        assert_eq!(config.model_class.as_deref(), Some("large"));
         assert_eq!(config.max_tokens, 2048);
         assert_eq!(config.max_turns, 50); // unchanged
         assert_eq!(config.max_budget_usd, Some(5.0));
@@ -295,6 +313,7 @@ mode = "os-native"
         let user_partial = PartialConfig {
             general: Some(GeneralSection {
                 default_model: Some("user-model".into()),
+                model_class: None,
                 max_tokens: Some(4096),
                 max_turns: None,
                 max_budget_usd: None,
@@ -310,6 +329,7 @@ mode = "os-native"
         let project_partial = PartialConfig {
             general: Some(GeneralSection {
                 default_model: None,
+                model_class: None,
                 max_tokens: Some(8192),
                 max_turns: None,
                 max_budget_usd: None,

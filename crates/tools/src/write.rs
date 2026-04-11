@@ -80,6 +80,7 @@ mod tests {
         ToolContext {
             cwd: dir.to_string_lossy().to_string(),
             interactive: false,
+            progress_tx: None,
         }
     }
 

@@ -1,8 +1,17 @@
-//! cisco-code-telemetry: Observability, RL traces, and enterprise audit logging.
+//! cisco-code-telemetry: Observability, tracing, metrics, and audit logging.
 //!
-//! Design insight from Astro-Assistant: Every agent step records
-//! (state, action, observation, reward) for RL training data collection.
+//! Provides:
+//! - Span-based tracing (interaction → llm_request → tool hierarchy)
+//! - Metrics collection (tokens, latency, error rates)
+//! - SQLite audit log for enterprise compliance
+//! - Export in JSON and CSV formats
 
-/// Placeholder for Phase 8 implementation.
-pub struct TraceCollector;
-pub struct AuditLogger;
+pub mod audit;
+pub mod export;
+pub mod metrics;
+pub mod spans;
+
+pub use audit::{AuditEntry, AuditLogger};
+pub use export::{export_audit_csv, export_metrics_json, export_spans_json};
+pub use metrics::{HistogramSummary, MetricsCollector, SessionMetrics};
+pub use spans::{Span, SpanCollector, SpanKind, SpanStatus};

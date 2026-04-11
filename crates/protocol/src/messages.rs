@@ -28,6 +28,11 @@ pub enum Message {
     ToolUse(ToolUseMessage),
     #[serde(rename = "tool_result")]
     ToolResult(ToolResultMessage),
+    /// Marks where context compaction occurred.
+    /// Everything before this boundary was summarized into the summary text.
+    /// Matches Claude Code's `SystemCompactBoundaryMessage`.
+    #[serde(rename = "compact_boundary")]
+    CompactBoundary(CompactBoundaryMessage),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,6 +88,20 @@ pub struct ToolResultMessage {
     pub injected_messages: Option<Vec<Message>>,
 }
 
+/// Marks a context compaction boundary in the conversation.
+/// When the context window fills up, earlier messages are summarized and
+/// replaced with a compact summary. This message marks where that happened.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompactBoundaryMessage {
+    pub id: MessageId,
+    /// Summary of the compacted messages.
+    pub summary: String,
+    /// Number of original messages that were compacted.
+    pub compacted_message_count: usize,
+    /// Timestamp when compaction occurred.
+    pub timestamp: String,
+}
+
 /// Content block within a message.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -103,6 +122,9 @@ pub enum ContentBlock {
     },
     #[serde(rename = "image")]
     Image { source: ImageSource },
+    /// Extended thinking block — model's internal reasoning (not shown to user by default).
+    #[serde(rename = "thinking")]
+    Thinking { thinking: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -245,6 +267,25 @@ mod tests {
     }
 
     #[test]
+    fn test_thinking_content_block() {
+        let block = ContentBlock::Thinking {
+            thinking: "Let me analyze the code step by step...".into(),
+        };
+        let json = serde_json::to_value(&block).unwrap();
+        assert_eq!(json["type"], "thinking");
+        assert!(json["thinking"].as_str().unwrap().contains("step by step"));
+
+        // Roundtrip
+        let deserialized: ContentBlock = serde_json::from_value(json).unwrap();
+        match deserialized {
+            ContentBlock::Thinking { thinking } => {
+                assert!(thinking.contains("analyze"));
+            }
+            _ => panic!("wrong content block type"),
+        }
+    }
+
+    #[test]
     fn test_assistant_message_with_usage() {
         let msg = AssistantMessage {
             id: Uuid::new_v4(),
@@ -263,5 +304,29 @@ mod tests {
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("claude-sonnet-4-6"));
         assert!(json.contains("EndTurn"));
+    }
+
+    #[test]
+    fn test_compact_boundary_serialization() {
+        let msg = Message::CompactBoundary(CompactBoundaryMessage {
+            id: Uuid::new_v4(),
+            summary: "Compacted 42 messages about login refactor".into(),
+            compacted_message_count: 42,
+            timestamp: "2026-04-03T12:00:00Z".into(),
+        });
+
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("compact_boundary"));
+        assert!(json.contains("42"));
+
+        // Roundtrip
+        let deserialized: Message = serde_json::from_str(&json).unwrap();
+        match deserialized {
+            Message::CompactBoundary(cb) => {
+                assert_eq!(cb.compacted_message_count, 42);
+                assert!(cb.summary.contains("login refactor"));
+            }
+            _ => panic!("wrong message type"),
+        }
     }
 }

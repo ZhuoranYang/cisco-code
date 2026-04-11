@@ -1,0 +1,32 @@
+[package]
+name = "cisco-code-server"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cisco-code-protocol = { path = "../protocol" }
+cisco-code-runtime = { path = "../runtime" }
+cisco-code-api = { path = "../api" }
+cisco-code-tools = { path = "../tools" }
+cisco-code-providers = { path = "../providers" }
+async-trait.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+
+# HTTP server
+axum = { version = "0.8", features = ["ws"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+
+# SSE / streaming
+tokio-stream = "0.1"
+futures.workspace = true
+
+[lints]
+workspace = true

@@ -37,5 +37,5 @@ pub mod slack;
 pub use channel::{Channel, IncomingMessage, MessageStream, OutgoingResponse, StatusUpdate};
 pub use manager::ChannelManager;
 pub use repl::ReplChannel;
-pub use webex::WebexChannel;
-pub use slack::SlackChannel;
+pub use slack::{SlackChannel, SlackChannelConfig};
+pub use webex::{WebexChannel, WebexChannelConfig};

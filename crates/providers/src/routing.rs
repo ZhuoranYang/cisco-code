@@ -1,77 +1,129 @@
-//! Model tier routing — assigns the right model for each task.
-//!
-//! Design insight from Astro-Assistant: 5-tier routing saves 80%+ costs.
-//! Title generation uses SMALL (~$0.001/1K), main agent uses LARGE (~$0.015/1K).
+//! Model routing — maps model classes to specific provider + model pairs.
 
-use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
 
-use crate::{Role, Tier};
+use crate::ModelClass;
 
-/// Default role → tier mapping.
-pub fn default_role_tiers() -> HashMap<Role, Tier> {
-    HashMap::from([
-        (Role::MainAgent, Tier::Large),
-        (Role::Planner, Tier::Large),
-        (Role::Executor, Tier::Large),
-        (Role::Reviewer, Tier::Teammate),
-        (Role::Compaction, Tier::Medium),
-        (Role::Classifier, Tier::Small),
-        (Role::Title, Tier::Small),
-        (Role::Guardian, Tier::Small),
-    ])
+/// A specific model on a specific provider backend.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelSpec {
+    /// Provider backend: "bedrock", "openai", or "anthropic"
+    pub provider: String,
+    /// Model identifier (e.g., "anthropic.claude-3-5-sonnet-20241022-v2:0" for Bedrock,
+    /// "gpt-4o" for OpenAI, "claude-sonnet-4-6" for Anthropic)
+    pub model: String,
 }
 
-/// Tier configuration — maps tiers to specific model identifiers.
-#[derive(Debug, Clone)]
-pub struct TierConfig {
-    pub small: String,
-    pub medium: String,
-    pub large: String,
-    pub teammate: String,
-    pub frontier: String,
+impl ModelSpec {
+    pub fn new(provider: impl Into<String>, model: impl Into<String>) -> Self {
+        Self {
+            provider: provider.into(),
+            model: model.into(),
+        }
+    }
+
+    /// Parse a "provider/model" string into a ModelSpec.
+    /// If no slash, defaults to "anthropic" provider.
+    pub fn parse(spec: &str) -> Self {
+        if let Some((provider, model)) = spec.split_once('/') {
+            Self::new(provider, model)
+        } else {
+            Self::new("anthropic", spec)
+        }
+    }
 }
 
-impl Default for TierConfig {
+/// Maps each model class to a specific provider + model.
+///
+/// Configurable via TOML or environment variables.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelConfig {
+    pub small: ModelSpec,
+    pub medium: ModelSpec,
+    pub large: ModelSpec,
+}
+
+impl ModelConfig {
+    /// Resolve a model class to its configured ModelSpec.
+    pub fn resolve(&self, class: ModelClass) -> &ModelSpec {
+        match class {
+            ModelClass::Small => &self.small,
+            ModelClass::Medium => &self.medium,
+            ModelClass::Large => &self.large,
+        }
+    }
+}
+
+impl Default for ModelConfig {
     fn default() -> Self {
         Self {
-            small: "anthropic/claude-haiku-4-5-20251001".to_string(),
-            medium: "anthropic/claude-sonnet-4-6".to_string(),
-            large: "anthropic/claude-opus-4-6".to_string(),
-            teammate: "openai/gpt-5".to_string(),
-            frontier: "anthropic/claude-opus-4-6".to_string(),
+            small: ModelSpec::new("bedrock", "anthropic.claude-3-5-haiku-20241022-v1:0"),
+            medium: ModelSpec::new("bedrock", "anthropic.claude-3-5-sonnet-20241022-v2:0"),
+            large: ModelSpec::new("openai", "gpt-4o"),
         }
     }
 }
 
-/// Task router — resolves roles to specific models.
-pub struct TaskRouter {
-    pub tier_config: TierConfig,
-    pub role_tiers: HashMap<Role, Tier>,
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-impl TaskRouter {
-    pub fn new(tier_config: TierConfig) -> Self {
-        Self {
-            tier_config,
-            role_tiers: default_role_tiers(),
-        }
+    #[test]
+    fn test_model_spec_new() {
+        let spec = ModelSpec::new("bedrock", "anthropic.claude-3-5-sonnet-20241022-v2:0");
+        assert_eq!(spec.provider, "bedrock");
+        assert_eq!(spec.model, "anthropic.claude-3-5-sonnet-20241022-v2:0");
     }
 
-    /// Resolve a role to a specific model identifier.
-    pub fn resolve(&self, role: Role) -> &str {
-        let tier = self.role_tiers.get(&role).copied().unwrap_or(Tier::Large);
-        match tier {
-            Tier::Small => &self.tier_config.small,
-            Tier::Medium => &self.tier_config.medium,
-            Tier::Large => &self.tier_config.large,
-            Tier::Teammate => &self.tier_config.teammate,
-            Tier::Frontier => &self.tier_config.frontier,
-        }
+    #[test]
+    fn test_model_spec_parse_with_provider() {
+        let spec = ModelSpec::parse("openai/gpt-4o");
+        assert_eq!(spec.provider, "openai");
+        assert_eq!(spec.model, "gpt-4o");
     }
-}
 
-impl Default for TaskRouter {
-    fn default() -> Self {
-        Self::new(TierConfig::default())
+    #[test]
+    fn test_model_spec_parse_without_provider() {
+        let spec = ModelSpec::parse("claude-sonnet-4-6");
+        assert_eq!(spec.provider, "anthropic");
+        assert_eq!(spec.model, "claude-sonnet-4-6");
+    }
+
+    #[test]
+    fn test_model_config_default() {
+        let config = ModelConfig::default();
+        assert_eq!(config.small.provider, "bedrock");
+        assert_eq!(config.medium.provider, "bedrock");
+        assert_eq!(config.large.provider, "openai");
+    }
+
+    #[test]
+    fn test_model_config_resolve() {
+        let config = ModelConfig::default();
+        let small = config.resolve(ModelClass::Small);
+        assert_eq!(small.provider, "bedrock");
+        assert!(small.model.contains("haiku"));
+
+        let large = config.resolve(ModelClass::Large);
+        assert_eq!(large.provider, "openai");
+        assert_eq!(large.model, "gpt-4o");
+    }
+
+    #[test]
+    fn test_model_spec_serde_roundtrip() {
+        let spec = ModelSpec::new("bedrock", "anthropic.claude-3-5-sonnet-20241022-v2:0");
+        let json = serde_json::to_string(&spec).unwrap();
+        let parsed: ModelSpec = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.provider, spec.provider);
+        assert_eq!(parsed.model, spec.model);
+    }
+
+    #[test]
+    fn test_model_config_serde_roundtrip() {
+        let config = ModelConfig::default();
+        let json = serde_json::to_string(&config).unwrap();
+        let parsed: ModelConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.small.provider, config.small.provider);
+        assert_eq!(parsed.large.model, config.large.model);
     }
 }
