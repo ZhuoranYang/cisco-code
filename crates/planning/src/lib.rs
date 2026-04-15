@@ -1,12 +1,17 @@
-//! cisco-code-planning: Plan mode (DEPRECATED for now).
+//! cisco-code-planning: Plan mode for the agent loop.
 //!
-//! Plan mode is deferred — use Claude Code's built-in plan mode instead.
-//! This crate is kept as a placeholder for future implementation if needed.
-//!
-//! The original design called for DAG-based task planning (from Astro-Assistant),
-//! but the simpler ReAct loop in the agent turn loop handles most use cases well.
+//! Matches Claude Code v2.1.88's plan mode architecture:
+//! - Plan mode is a permission mode variant (read-only, no code changes)
+//! - Plans stored as markdown files at `~/.cisco-code/plans/{slug}.md`
+//! - Slug is a random word-based identifier (adjective-noun-verb)
+//! - EnterPlanMode/ExitPlanMode are tools that transition modes
+//! - PlanManager handles slug caching, file I/O, resume/fork
 
-// Placeholder structs kept for compilation; no active development.
+pub mod plan;
+pub mod manager;
 
-pub struct TaskDag;
-pub struct Planner;
+pub use plan::{
+    PlanModeState, PlanSlugCache,
+    plan_file_path, read_plan, resolve_plans_directory, write_plan,
+};
+pub use manager::PlanManager;

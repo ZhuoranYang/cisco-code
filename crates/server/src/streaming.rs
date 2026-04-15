@@ -30,6 +30,9 @@ pub fn stream_events(
             StreamEvent::PermissionRequest { .. } => "permission_request",
             StreamEvent::TurnEnd { .. } => "turn_end",
             StreamEvent::Error { .. } => "error",
+            StreamEvent::PlanModeEnter => "plan_mode_enter",
+            StreamEvent::PlanModeExit { .. } => "plan_mode_exit",
+            StreamEvent::PlanUpdate { .. } => "plan_update",
         };
 
         let data = serde_json::to_string(&event).unwrap_or_else(|_| "{}".into());

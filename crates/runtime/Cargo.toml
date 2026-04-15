@@ -8,6 +8,7 @@ cisco-code-protocol = { path = "../protocol" }
 cisco-code-api = { path = "../api" }
 cisco-code-tools = { path = "../tools" }
 cisco-code-sandbox = { path = "../sandbox" }
+cisco-code-planning = { path = "../planning" }
 async-trait.workspace = true
 rusqlite.workspace = true
 tokio.workspace = true
