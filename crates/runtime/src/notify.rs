@@ -150,6 +150,15 @@ impl Notifier {
                 file_operation: None,
                 prompt: None,
                 summary_tokens: None,
+            plan_content: None,
+            plan_file_path: None,
+            plan_slug: None,
+            permission_mode: None,
+            previous_mode: None,
+            error_message: None,
+            retry_attempt: None,
+            worktree_path: None,
+            cron_task_id: None,
             };
             match hooks.run(&hook_input).await {
                 HookResult::Suppress { message } => {

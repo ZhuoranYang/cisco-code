@@ -16,36 +16,82 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 /// A lifecycle event that can trigger hooks.
+///
+/// Matches Claude Code v2.1.88's 27 hook event types.
+/// Organized by lifecycle phase: session, turn, tool, file, agent, plan, system.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HookEvent {
-    /// Before a tool is executed. Hook can modify input or block execution.
-    PreToolUse,
-    /// After a tool has executed. Informational only.
-    PostToolUse,
+    // ── Session lifecycle ──
     /// When a new session starts.
     SessionStart,
     /// When a session ends.
     SessionEnd,
+    /// When a session is resumed from persistence.
+    SessionResume,
+    /// When a session is paused/suspended.
+    SessionPause,
+
+    // ── Turn lifecycle ──
     /// Before sending a message to the LLM.
     PreMessage,
     /// After receiving a response from the LLM.
     PostMessage,
-    /// Fired when the agent is stopped (Ctrl+C, cancel, max turns, completed).
-    Stop,
-    /// Fired when a subagent completes or is cancelled.
-    SubagentStop,
-    /// Fired when a notification is about to be sent to the user.
-    Notification,
     /// Fired when the user submits a prompt, before it's processed.
     /// Hook can modify the prompt (stdout JSON with "prompt" key) or suppress it (exit 1).
     UserPromptSubmit,
+
+    // ── Tool lifecycle ──
+    /// Before a tool is executed. Hook can modify input or block execution.
+    PreToolUse,
+    /// After a tool has executed. Informational only.
+    PostToolUse,
+    /// When a tool execution fails (non-zero exit, timeout, error).
+    PostToolFailure,
+
+    // ── File events ──
     /// Fired after a file is created or modified by a tool (Write, Edit, ApplyPatch).
     FileChanged,
+    /// Fired when a file is deleted.
+    FileDeleted,
+
+    // ── Agent/subagent events ──
+    /// Fired when the agent is stopped (Ctrl+C, cancel, max turns, completed).
+    Stop,
+    /// Fired when a subagent is spawned.
+    SubagentStart,
+    /// Fired when a subagent completes or is cancelled.
+    SubagentStop,
+
+    // ── Plan mode events ──
+    /// Fired when entering plan mode.
+    PlanModeEnter,
+    /// Fired when exiting plan mode (plan approved/written).
+    PlanModeExit,
+    /// Fired when a plan is updated/saved.
+    PlanUpdate,
+
+    // ── Worktree events ──
+    /// Fired when a git worktree is created for isolation.
+    WorktreeCreate,
+    /// Fired when a git worktree is cleaned up.
+    WorktreeRemove,
+
+    // ── System events ──
+    /// Fired when a notification is about to be sent to the user.
+    Notification,
     /// Fired before context compaction begins.
     CompactionStart,
     /// Fired after context compaction completes.
     CompactionEnd,
+    /// Fired when a permission request is made.
+    PermissionRequest,
+    /// Fired when the model encounters a rate limit or error and retries.
+    Retry,
+    /// Fired when a hook itself fails (meta-event for observability).
+    HookError,
+    /// Fired when a cron task triggers.
+    CronTrigger,
 }
 
 /// A configured hook: an event trigger + shell command.
@@ -110,6 +156,33 @@ pub struct HookInput {
     /// Compaction summary tokens (for CompactionEnd events).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary_tokens: Option<u64>,
+    /// Plan content (for PlanModeExit/PlanUpdate events).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plan_content: Option<String>,
+    /// Plan file path (for PlanModeExit/PlanUpdate events).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plan_file_path: Option<String>,
+    /// Plan slug (for plan-related events).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plan_slug: Option<String>,
+    /// Permission mode (for PlanModeEnter/PlanModeExit/PermissionRequest events).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub permission_mode: Option<String>,
+    /// Previous permission mode (for PlanModeExit — the mode being restored).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub previous_mode: Option<String>,
+    /// Error message (for PostToolFailure/HookError/Retry events).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_message: Option<String>,
+    /// Retry attempt number (for Retry events).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub retry_attempt: Option<u32>,
+    /// Worktree path (for WorktreeCreate/WorktreeRemove events).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub worktree_path: Option<String>,
+    /// Cron task ID (for CronTrigger events).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cron_task_id: Option<String>,
 }
 
 /// Result of running a hook.
@@ -454,6 +527,15 @@ mod tests {
             file_operation: None,
             prompt: None,
             summary_tokens: None,
+            plan_content: None,
+            plan_file_path: None,
+            plan_slug: None,
+            permission_mode: None,
+            previous_mode: None,
+            error_message: None,
+            retry_attempt: None,
+            worktree_path: None,
+            cron_task_id: None,
         };
 
         let json = serde_json::to_string(&input).unwrap();
@@ -491,6 +573,15 @@ mod tests {
             file_operation: None,
             prompt: None,
             summary_tokens: None,
+            plan_content: None,
+            plan_file_path: None,
+            plan_slug: None,
+            permission_mode: None,
+            previous_mode: None,
+            error_message: None,
+            retry_attempt: None,
+            worktree_path: None,
+            cron_task_id: None,
         };
         let result = runner.run(&input).await;
         assert!(matches!(result, HookResult::Continue));
@@ -520,6 +611,15 @@ mod tests {
             file_operation: None,
             prompt: None,
             summary_tokens: None,
+            plan_content: None,
+            plan_file_path: None,
+            plan_slug: None,
+            permission_mode: None,
+            previous_mode: None,
+            error_message: None,
+            retry_attempt: None,
+            worktree_path: None,
+            cron_task_id: None,
         };
         let result = runner.run(&input).await;
         assert!(matches!(result, HookResult::Continue));
@@ -549,6 +649,15 @@ mod tests {
             file_operation: None,
             prompt: None,
             summary_tokens: None,
+            plan_content: None,
+            plan_file_path: None,
+            plan_slug: None,
+            permission_mode: None,
+            previous_mode: None,
+            error_message: None,
+            retry_attempt: None,
+            worktree_path: None,
+            cron_task_id: None,
         };
         let result = runner.run(&input).await;
         assert!(matches!(result, HookResult::Suppress { .. }));
@@ -581,6 +690,15 @@ mod tests {
             file_operation: None,
             prompt: None,
             summary_tokens: None,
+            plan_content: None,
+            plan_file_path: None,
+            plan_slug: None,
+            permission_mode: None,
+            previous_mode: None,
+            error_message: None,
+            retry_attempt: None,
+            worktree_path: None,
+            cron_task_id: None,
         };
         let result = runner.run(&input).await;
         assert!(matches!(result, HookResult::Continue));
@@ -610,6 +728,15 @@ mod tests {
             file_operation: None,
             prompt: None,
             summary_tokens: None,
+            plan_content: None,
+            plan_file_path: None,
+            plan_slug: None,
+            permission_mode: None,
+            previous_mode: None,
+            error_message: None,
+            retry_attempt: None,
+            worktree_path: None,
+            cron_task_id: None,
         };
         let result = runner.run(&input).await;
         assert!(matches!(result, HookResult::Error { .. }));
@@ -682,6 +809,15 @@ mod tests {
             file_operation: None,
             prompt: None,
             summary_tokens: None,
+            plan_content: None,
+            plan_file_path: None,
+            plan_slug: None,
+            permission_mode: None,
+            previous_mode: None,
+            error_message: None,
+            retry_attempt: None,
+            worktree_path: None,
+            cron_task_id: None,
         };
 
         let json = serde_json::to_string(&input).unwrap();
@@ -707,6 +843,15 @@ mod tests {
             file_operation: None,
             prompt: None,
             summary_tokens: None,
+            plan_content: None,
+            plan_file_path: None,
+            plan_slug: None,
+            permission_mode: None,
+            previous_mode: None,
+            error_message: None,
+            retry_attempt: None,
+            worktree_path: None,
+            cron_task_id: None,
         };
 
         let json = serde_json::to_string(&input).unwrap();
@@ -735,6 +880,15 @@ mod tests {
             file_operation: None,
             prompt: None,
             summary_tokens: None,
+            plan_content: None,
+            plan_file_path: None,
+            plan_slug: None,
+            permission_mode: None,
+            previous_mode: None,
+            error_message: None,
+            retry_attempt: None,
+            worktree_path: None,
+            cron_task_id: None,
         };
 
         let json = serde_json::to_string(&input).unwrap();
@@ -822,8 +976,116 @@ mod tests {
             file_operation: None,
             prompt: None,
             summary_tokens: None,
+            plan_content: None,
+            plan_file_path: None,
+            plan_slug: None,
+            permission_mode: None,
+            previous_mode: None,
+            error_message: None,
+            retry_attempt: None,
+            worktree_path: None,
+            cron_task_id: None,
         };
         let result = runner.run(&input).await;
         assert!(matches!(result, HookResult::Continue));
+    }
+
+    #[test]
+    fn test_plan_mode_event_serialization() {
+        let enter = HookEvent::PlanModeEnter;
+        assert_eq!(serde_json::to_string(&enter).unwrap(), "\"plan_mode_enter\"");
+
+        let exit = HookEvent::PlanModeExit;
+        assert_eq!(serde_json::to_string(&exit).unwrap(), "\"plan_mode_exit\"");
+
+        let update = HookEvent::PlanUpdate;
+        assert_eq!(serde_json::to_string(&update).unwrap(), "\"plan_update\"");
+    }
+
+    #[test]
+    fn test_plan_mode_event_deserialization() {
+        let enter: HookEvent = serde_json::from_str("\"plan_mode_enter\"").unwrap();
+        assert_eq!(enter, HookEvent::PlanModeEnter);
+
+        let exit: HookEvent = serde_json::from_str("\"plan_mode_exit\"").unwrap();
+        assert_eq!(exit, HookEvent::PlanModeExit);
+    }
+
+    #[test]
+    fn test_plan_mode_hook_input_serialization() {
+        let input = HookInput {
+            event: HookEvent::PlanModeExit,
+            session_id: "sess-plan".into(),
+            tool_name: None,
+            tool_input: None,
+            tool_result: None,
+            is_error: None,
+            subagent_id: None,
+            stop_reason: None,
+            notification: None,
+            file_path: None,
+            file_operation: None,
+            prompt: None,
+            summary_tokens: None,
+            plan_content: Some("## Plan\n1. Step one".into()),
+            plan_file_path: Some("/home/.cisco-code/plans/bold-creek-forge.md".into()),
+            plan_slug: Some("bold-creek-forge".into()),
+            permission_mode: Some("default".into()),
+            previous_mode: Some("plan".into()),
+            error_message: None,
+            retry_attempt: None,
+            worktree_path: None,
+            cron_task_id: None,
+        };
+
+        let json = serde_json::to_string(&input).unwrap();
+        assert!(json.contains("\"plan_mode_exit\""));
+        assert!(json.contains("bold-creek-forge"));
+        assert!(json.contains("Step one"));
+        assert!(!json.contains("error_message")); // skip_serializing_if
+        assert!(!json.contains("worktree_path")); // skip_serializing_if
+    }
+
+    #[test]
+    fn test_all_new_events_serialize_deserialize() {
+        let events = vec![
+            (HookEvent::SessionResume, "\"session_resume\""),
+            (HookEvent::SessionPause, "\"session_pause\""),
+            (HookEvent::PostToolFailure, "\"post_tool_failure\""),
+            (HookEvent::FileDeleted, "\"file_deleted\""),
+            (HookEvent::SubagentStart, "\"subagent_start\""),
+            (HookEvent::PlanModeEnter, "\"plan_mode_enter\""),
+            (HookEvent::PlanModeExit, "\"plan_mode_exit\""),
+            (HookEvent::PlanUpdate, "\"plan_update\""),
+            (HookEvent::WorktreeCreate, "\"worktree_create\""),
+            (HookEvent::WorktreeRemove, "\"worktree_remove\""),
+            (HookEvent::PermissionRequest, "\"permission_request\""),
+            (HookEvent::Retry, "\"retry\""),
+            (HookEvent::HookError, "\"hook_error\""),
+            (HookEvent::CronTrigger, "\"cron_trigger\""),
+        ];
+
+        for (event, expected_json) in events {
+            let serialized = serde_json::to_string(&event).unwrap();
+            assert_eq!(serialized, expected_json, "serialize {:?}", event);
+
+            let deserialized: HookEvent = serde_json::from_str(expected_json).unwrap();
+            assert_eq!(deserialized, event, "deserialize {expected_json}");
+        }
+    }
+
+    #[test]
+    fn test_hook_config_deserialize_plan_events() {
+        let config: HookConfig = serde_json::from_str(
+            r#"{"event": "plan_mode_enter", "command": "on-plan-enter.sh"}"#,
+        )
+        .unwrap();
+        assert_eq!(config.event, HookEvent::PlanModeEnter);
+
+        let config: HookConfig = serde_json::from_str(
+            r#"{"event": "plan_mode_exit", "command": "on-plan-exit.sh"}"#,
+        )
+        .unwrap();
+        assert_eq!(config.event, HookEvent::PlanModeExit);
     }
 }

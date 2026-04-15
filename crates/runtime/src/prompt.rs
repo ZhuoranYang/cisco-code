@@ -105,6 +105,12 @@ pub struct PromptBuilder {
     skills_context: Option<String>,
     todo_content: Option<String>,
     mcp_instructions: Option<String>,
+    /// Active plan content (injected when a plan exists from a previous plan mode session).
+    plan_content: Option<String>,
+    /// Plan file path (for reference in prompts).
+    plan_file_path: Option<String>,
+    /// Whether we're currently in plan mode.
+    in_plan_mode: bool,
 }
 
 impl PromptBuilder {
@@ -119,6 +125,9 @@ impl PromptBuilder {
             skills_context: None,
             todo_content: None,
             mcp_instructions: None,
+            plan_content: None,
+            plan_file_path: None,
+            in_plan_mode: false,
         }
     }
 
@@ -159,6 +168,19 @@ impl PromptBuilder {
 
     pub fn with_mcp_instructions(mut self, instructions: impl Into<String>) -> Self {
         self.mcp_instructions = Some(instructions.into());
+        self
+    }
+
+    /// Set the active plan content (from a previous plan mode session).
+    pub fn with_plan(mut self, content: impl Into<String>, file_path: impl Into<String>) -> Self {
+        self.plan_content = Some(content.into());
+        self.plan_file_path = Some(file_path.into());
+        self
+    }
+
+    /// Mark that we're currently in plan mode.
+    pub fn in_plan_mode(mut self, active: bool) -> Self {
+        self.in_plan_mode = active;
         self
     }
 
@@ -219,7 +241,27 @@ impl PromptBuilder {
             sections.push(format!("# MCP Server Instructions\n\n{mcp}"));
         }
 
-        // 10. Current date
+        // 10. Plan context
+        if self.in_plan_mode {
+            sections.push(
+                "# Plan Mode Active\n\n\
+                 You are currently in **plan mode**. Focus on research, analysis, and planning.\n\
+                 DO NOT write or edit any code files. Only use read-only tools.\n\
+                 When your plan is ready, call `ExitPlanMode` with your plan to present it for approval."
+                    .to_string(),
+            );
+        }
+        if let Some(ref plan) = self.plan_content {
+            let mut plan_section = String::from("# Active Plan\n\n");
+            if let Some(ref path) = self.plan_file_path {
+                plan_section.push_str(&format!("Plan file: `{path}`\n\n"));
+            }
+            plan_section.push_str("Follow this plan. Mark steps as you complete them.\n\n");
+            plan_section.push_str(plan);
+            sections.push(plan_section);
+        }
+
+        // 11. Current date
         let date = chrono::Local::now().format("%Y-%m-%d").to_string();
         sections.push(format!("# Current Date\nToday is {date}."));
 

@@ -4,16 +4,11 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-cisco-code-protocol = { path = "../protocol" }
-cisco-code-providers = { path = "../providers" }
-tokio.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-tracing.workspace = true
 anyhow.workspace = true
-thiserror.workspace = true
-uuid.workspace = true
-# petgraph = "0.6"  # TODO: add when implementing DAG
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true

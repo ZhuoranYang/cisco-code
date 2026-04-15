@@ -31,7 +31,7 @@ pub struct RuntimeConfig {
     pub thinking: Option<ThinkingConfig>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PermissionMode {
     /// Ask for every tool use
     Default,
@@ -41,6 +41,35 @@ pub enum PermissionMode {
     BypassPermissions,
     /// Deny all tool use
     DenyAll,
+    /// Plan mode — read-only, no code changes allowed.
+    /// Matches Claude Code's plan mode: the agent focuses on research,
+    /// analysis, and planning. Only read-only tools are permitted.
+    Plan,
+}
+
+impl PermissionMode {
+    /// Convert to a string identifier (used for state transitions).
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Default => "default",
+            Self::AcceptReads => "accept_reads",
+            Self::BypassPermissions => "bypass",
+            Self::DenyAll => "deny_all",
+            Self::Plan => "plan",
+        }
+    }
+
+    /// Parse from a string identifier.
+    pub fn from_str_lossy(s: &str) -> Self {
+        match s {
+            "default" => Self::Default,
+            "accept_reads" | "accept-reads" => Self::AcceptReads,
+            "bypass" => Self::BypassPermissions,
+            "deny_all" | "deny-all" => Self::DenyAll,
+            "plan" => Self::Plan,
+            _ => Self::Default,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -155,12 +184,7 @@ impl RuntimeConfig {
 
         if let Some(ref perms) = partial.permissions {
             if let Some(ref mode) = perms.mode {
-                self.permission_mode = match mode.as_str() {
-                    "accept-reads" => PermissionMode::AcceptReads,
-                    "bypass" => PermissionMode::BypassPermissions,
-                    "deny-all" => PermissionMode::DenyAll,
-                    _ => PermissionMode::Default,
-                };
+                self.permission_mode = PermissionMode::from_str_lossy(mode);
             }
         }
 
@@ -279,7 +303,7 @@ mode = "os-native"
         assert_eq!(config.max_tokens, 2048);
         assert_eq!(config.max_turns, 50); // unchanged
         assert_eq!(config.max_budget_usd, Some(5.0));
-        assert!(matches!(config.permission_mode, PermissionMode::AcceptReads));
+        assert_eq!(config.permission_mode, PermissionMode::AcceptReads);
     }
 
     #[test]
@@ -341,5 +365,40 @@ mode = "os-native"
         config.apply_partial(&project_partial);
         assert_eq!(config.model, "user-model"); // not overridden
         assert_eq!(config.max_tokens, 8192); // overridden
+    }
+
+    #[test]
+    fn test_permission_mode_as_str() {
+        assert_eq!(PermissionMode::Default.as_str(), "default");
+        assert_eq!(PermissionMode::AcceptReads.as_str(), "accept_reads");
+        assert_eq!(PermissionMode::BypassPermissions.as_str(), "bypass");
+        assert_eq!(PermissionMode::DenyAll.as_str(), "deny_all");
+        assert_eq!(PermissionMode::Plan.as_str(), "plan");
+    }
+
+    #[test]
+    fn test_permission_mode_from_str_lossy() {
+        assert_eq!(PermissionMode::from_str_lossy("default"), PermissionMode::Default);
+        assert_eq!(PermissionMode::from_str_lossy("accept_reads"), PermissionMode::AcceptReads);
+        assert_eq!(PermissionMode::from_str_lossy("accept-reads"), PermissionMode::AcceptReads);
+        assert_eq!(PermissionMode::from_str_lossy("bypass"), PermissionMode::BypassPermissions);
+        assert_eq!(PermissionMode::from_str_lossy("deny_all"), PermissionMode::DenyAll);
+        assert_eq!(PermissionMode::from_str_lossy("deny-all"), PermissionMode::DenyAll);
+        assert_eq!(PermissionMode::from_str_lossy("plan"), PermissionMode::Plan);
+        assert_eq!(PermissionMode::from_str_lossy("unknown"), PermissionMode::Default);
+    }
+
+    #[test]
+    fn test_permission_mode_plan_in_config() {
+        let mut config = RuntimeConfig::default();
+        let partial = PartialConfig {
+            general: None,
+            permissions: Some(PermissionsSection {
+                mode: Some("plan".into()),
+            }),
+            sandbox: None,
+        };
+        config.apply_partial(&partial);
+        assert_eq!(config.permission_mode, PermissionMode::Plan);
     }
 }

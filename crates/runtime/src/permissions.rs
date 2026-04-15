@@ -421,6 +421,18 @@ impl PermissionEngine {
                     ),
                 },
             },
+
+            // Plan mode: only read-only tools are allowed. All writes/executions
+            // are denied. Matches Claude Code's plan mode behavior.
+            PermissionMode::Plan => match permission_level {
+                PermissionLevel::ReadOnly => PermissionDecision::Allow,
+                _ => PermissionDecision::Deny {
+                    reason: format!(
+                        "'{tool_name}' is not allowed in plan mode (read-only). \
+                         Exit plan mode first to make changes."
+                    ),
+                },
+            },
         }
     }
 

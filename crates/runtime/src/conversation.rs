@@ -473,6 +473,15 @@ impl<P: Provider> ConversationRuntime<P> {
             file_operation: None,
             prompt: Some(user_input.to_string()),
             summary_tokens: None,
+            plan_content: None,
+            plan_file_path: None,
+            plan_slug: None,
+            permission_mode: None,
+            previous_mode: None,
+            error_message: None,
+            retry_attempt: None,
+            worktree_path: None,
+            cron_task_id: None,
         };
         let effective_prompt = match self.hooks.run(&prompt_hook_input).await {
             HookResult::Suppress { message } => {
@@ -643,6 +652,15 @@ impl<P: Provider> ConversationRuntime<P> {
                         file_operation: None,
                         prompt: None,
                         summary_tokens: None,
+            plan_content: None,
+            plan_file_path: None,
+            plan_slug: None,
+            permission_mode: None,
+            previous_mode: None,
+            error_message: None,
+            retry_attempt: None,
+            worktree_path: None,
+            cron_task_id: None,
                     };
 
                     let mut effective_input = tool_input.clone();
@@ -928,6 +946,15 @@ impl<P: Provider> ConversationRuntime<P> {
                         file_operation: None,
                         prompt: None,
                         summary_tokens: None,
+            plan_content: None,
+            plan_file_path: None,
+            plan_slug: None,
+            permission_mode: None,
+            previous_mode: None,
+            error_message: None,
+            retry_attempt: None,
+            worktree_path: None,
+            cron_task_id: None,
                     };
                     let _ = self.hooks.run(&post_hook_input).await;
 
@@ -961,6 +988,15 @@ impl<P: Provider> ConversationRuntime<P> {
                             file_operation: Some(file_op.to_string()),
                             prompt: None,
                             summary_tokens: None,
+            plan_content: None,
+            plan_file_path: None,
+            plan_slug: None,
+            permission_mode: None,
+            previous_mode: None,
+            error_message: None,
+            retry_attempt: None,
+            worktree_path: None,
+            cron_task_id: None,
                         };
                         let _ = self.hooks.run(&file_hook_input).await;
                     }
@@ -1026,6 +1062,15 @@ impl<P: Provider> ConversationRuntime<P> {
                     file_operation: None,
                     prompt: None,
                     summary_tokens: None,
+            plan_content: None,
+            plan_file_path: None,
+            plan_slug: None,
+            permission_mode: None,
+            previous_mode: None,
+            error_message: None,
+            retry_attempt: None,
+            worktree_path: None,
+            cron_task_id: None,
                 };
                 let _ = self.hooks.run(&stop_input).await;
                 early_exit = true;
@@ -1056,6 +1101,15 @@ impl<P: Provider> ConversationRuntime<P> {
                         file_operation: None,
                         prompt: None,
                         summary_tokens: None,
+            plan_content: None,
+            plan_file_path: None,
+            plan_slug: None,
+            permission_mode: None,
+            previous_mode: None,
+            error_message: None,
+            retry_attempt: None,
+            worktree_path: None,
+            cron_task_id: None,
                     };
                     let _ = self.hooks.run(&stop_input).await;
                     early_exit = true;
@@ -1088,6 +1142,15 @@ impl<P: Provider> ConversationRuntime<P> {
                     file_operation: None,
                     prompt: None,
                     summary_tokens: None,
+            plan_content: None,
+            plan_file_path: None,
+            plan_slug: None,
+            permission_mode: None,
+            previous_mode: None,
+            error_message: None,
+            retry_attempt: None,
+            worktree_path: None,
+            cron_task_id: None,
                 };
                 let _ = self.hooks.run(&compact_start).await;
 
@@ -1159,6 +1222,15 @@ impl<P: Provider> ConversationRuntime<P> {
                             file_operation: None,
                             prompt: None,
                             summary_tokens: Some(summary_tokens),
+            plan_content: None,
+            plan_file_path: None,
+            plan_slug: None,
+            permission_mode: None,
+            previous_mode: None,
+            error_message: None,
+            retry_attempt: None,
+            worktree_path: None,
+            cron_task_id: None,
                         };
                         let _ = self.hooks.run(&compact_end).await;
                     }
@@ -1186,6 +1258,15 @@ impl<P: Provider> ConversationRuntime<P> {
                 file_operation: None,
                 prompt: None,
                 summary_tokens: None,
+            plan_content: None,
+            plan_file_path: None,
+            plan_slug: None,
+            permission_mode: None,
+            previous_mode: None,
+            error_message: None,
+            retry_attempt: None,
+            worktree_path: None,
+            cron_task_id: None,
             };
             let _ = self.hooks.run(&stop_input).await;
         }

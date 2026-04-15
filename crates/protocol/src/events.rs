@@ -74,6 +74,25 @@ pub enum StreamEvent {
         message: String,
         recoverable: bool,
     },
+
+    /// Plan mode entered — agent is now in read-only planning mode.
+    PlanModeEnter,
+
+    /// Plan mode exited — agent has presented plan and restored previous mode.
+    PlanModeExit {
+        /// The plan content (markdown).
+        plan: Option<String>,
+        /// Path where the plan was saved.
+        plan_file_path: Option<String>,
+        /// The permission mode being restored.
+        restored_mode: String,
+    },
+
+    /// Plan updated/saved to disk during plan mode.
+    PlanUpdate {
+        /// Path where the plan was saved.
+        plan_file_path: String,
+    },
 }
 
 /// Tool-specific progress data.
